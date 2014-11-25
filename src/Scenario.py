@@ -20,7 +20,6 @@ from python import BB, LBFGS, DORE, solvers
 import numpy.linalg as la
 import matplotlib.pyplot as plt
 
-
 # Dependencies for compressed sensing
 
 # Dependencies for traffic assignment
@@ -55,7 +54,7 @@ def parser():
 
 # Data generation
 # -------------------------------------
-def generate_data_P(num_rows=2, num_cols=6, num_routes_per_od=4,
+def generate_data_P(num_rows=5, num_cols=6, num_routes_per_od=4,
                     num_nonzero_routes_per_o=10, prefix=''):
     """
     Generate and export probabilistic matrices
@@ -117,7 +116,7 @@ def experiment_LS(test):
     ## LS experiment
     ## TODO: invoke solver
     A, b, N, block_sizes, x_true, nz, flow, rsort_index = \
-        load_data('%s/%s' % (c.DATA_DIR,test), full=False, OD=True, CP=False,
+        load_data('%s/%s' % (c.DATA_DIR,test), full=False, OD=True, CP=True,
                   eq='OD')
 
     if args.noise:
@@ -194,6 +193,7 @@ def experiment_LS(test):
     start_dist_from_true = np.max(np.abs(x_last-x0))
 
     x_diff = x_true - x_last
+    print 'A: %s, blocks: %s' % (A.shape, block_sizes.shape)
     print 'incorrect x entries: %s' % x_diff[np.abs(x_diff) > 1e-3].shape[0]
     per_flow = np.sum(np.abs(flow * (x_last-x_true))) / np.sum(flow * x_true)
     print 'percent flow allocated incorrectly: %f' % per_flow
@@ -219,7 +219,7 @@ if __name__ == "__main__":
     prefix = c.DATA_DIR + '/'
 
     # Generate data
-    # generate_data_P(prefix=prefix)
+    generate_data_P(prefix=prefix)
     print "Generated probabilistic data"
     # TODO: what does this mean?
     # N0, N1, scale, regions, res, margin
@@ -231,7 +231,7 @@ if __name__ == "__main__":
 
     sparse = False
     # test = 'UE_graph.mat'
-    test = 'small_graph_OD_dense.mat'
+    test = 'small_graph_OD.mat'
     # experiment_BI(test,sparse)
     experiment_LS(test)
 
