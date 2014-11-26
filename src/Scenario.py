@@ -117,7 +117,8 @@ def experiment_LS(test):
     ## TODO: invoke solver
     A, b, N, block_sizes, x_true, nz, flow, rsort_index = \
         load_data('%s/%s' % (c.DATA_DIR,test), full=False, OD=True, CP=True,
-                  eq='OD')
+                  eq='OD',init=False)
+    x0 = np.array(util.block_e(block_sizes - 1, block_sizes))
 
     if args.noise:
         b_true = b
@@ -125,11 +126,24 @@ def experiment_LS(test):
         b = b + delta
 
     logging.debug("Blocks: %s" % block_sizes.shape)
-    x0 = np.array(util.block_e(block_sizes - 1, block_sizes))
+    # z0 = np.zeros(N.shape[1])
+    if (block_sizes-1).any() == False:
+        iters, times, states = [0],[0],[x0]
+        x_last, error = LS_postprocess(states,x0,A,b,x_true,N,block_sizes,flow,is_x=True)
+    else:
+        iters, times, states = LS_solve(A,b,x0,N,block_sizes,args)
+        x_last, error = LS_postprocess(states,x0,A,b,x_true,N,block_sizes,flow)
+
+    LS_plot(x_last, times, error)
+    return iters, times, states
+
+def LS_solve(A,b,x0,N,block_sizes,args):
+    z0 = util.x2z(x0,block_sizes)
     target = A.dot(x0)-b
 
-    options = { 'max_iter': 5000,
+    options = { 'max_iter': 100000,
                 'verbose': 1,
+                'opt_tol' : 1e-30,
                 'suff_dec': 0.003, # FIXME unused
                 'corrections': 500 } # FIXME unused
     AT = A.T.tocsr()
@@ -142,8 +156,6 @@ def experiment_LS(test):
         projected_value = simplex_projection(block_sizes - 1,x)
         # projected_value = pysimplex_projection(block_sizes - 1,x)
         return projected_value
-
-    z0 = np.zeros(N.shape[1])
 
     import time
     iters, times, states = [], [], []
@@ -175,10 +187,15 @@ def experiment_LS(test):
                    log=log,options=options)
         A_dore = None
     logging.debug('Stopping %s solver...' % args.solver)
+    return iters, times, states
 
-    # Plot some stuff
+
+def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, is_x=False):
     d = len(states)
-    x_hat = N.dot(np.array(states).T) + np.tile(x0,(d,1)).T
+    if not is_x:
+        x_hat = N.dot(np.array(states).T) + np.tile(x0,(d,1)).T
+    else:
+        x_hat = np.array(states).T
     x_last = x_hat[:,-1]
 
     logging.debug("Shape of x0: %s" % repr(x0.shape))
@@ -189,18 +206,23 @@ def experiment_LS(test):
     diff = A.dot(x_hat) - np.tile(b,(d,1)).T
     error = 0.5 * np.diag(diff.T.dot(diff))
 
-    dist_from_true = np.max(np.abs(x_last-x_true))
-    start_dist_from_true = np.max(np.abs(x_last-x0))
+    x_diff = np.abs(x_true - x_last)
+    dist_from_true = np.max(flow * x_diff)
+    start_dist_from_true = np.max(flow * np.abs(x_last-x0))
 
-    x_diff = x_true - x_last
     print 'A: %s, blocks: %s' % (A.shape, block_sizes.shape)
-    print 'incorrect x entries: %s' % x_diff[np.abs(x_diff) > 1e-3].shape[0]
-    per_flow = np.sum(np.abs(flow * (x_last-x_true))) / np.sum(flow * x_true)
+    print 'incorrect x entries: %s' % x_diff[x_diff > 1e-3].shape[0]
+    per_flow = np.sum(flow * x_diff) / np.sum(flow * x_true)
     print 'percent flow allocated incorrectly: %f' % per_flow
-    print '0.5norm(Ax-b)^2: %8.5e\n0.5norm(Ax_init-b)^2: %8.5e\n0.5norm(Ax-b)^2: %8.5e\nmax|x-x_true|: %.2f\nmax|x_init-x_true|: %.2f\n\n\n' % \
-          (error[-1], starting_error, opt_error, dist_from_true,
-           start_dist_from_true)
+    print '0.5norm(Ax-b)^2: %8.5e\n0.5norm(Ax_init-b)^2: %8.5e' % \
+          (error[-1], starting_error)
+    print '0.5norm(Ax*-b)^2: %8.5e\nmax|x-x_true|: %.2f\nmax|x_init-x_true|: %.2f\n\n\n' % \
+          (opt_error, dist_from_true, start_dist_from_true)
+    sorted(enumerate(x_diff), key=lambda x: x[1])
+    ipdb.set_trace()
+    return x_last, error
 
+def LS_plot(x_last, times, error):
     plt.figure()
     plt.hist(x_last)
 
@@ -208,19 +230,18 @@ def experiment_LS(test):
     plt.loglog(np.cumsum(times),error)
     plt.show()
 
-    return iters, times, states
-
 if __name__ == "__main__":
     p = parser()
     args = p.parse_args()
     if args.log in c.ACCEPTED_LOG_LEVELS:
         logging.basicConfig(level=eval('logging.'+args.log))
+    logging.info('testing')
 
     prefix = c.DATA_DIR + '/'
 
     # Generate data
-    generate_data_P(prefix=prefix)
-    print "Generated probabilistic data"
+    # generate_data_P(prefix=prefix)
+    # print "Generated probabilistic data"
     # TODO: what does this mean?
     # N0, N1, scale, regions, res, margin
     # data = (20, 40, 0.2, [((3.5, 0.5, 6.5, 3.0), 20)], (12,6), 2.0)
