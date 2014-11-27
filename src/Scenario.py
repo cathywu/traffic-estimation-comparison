@@ -54,13 +54,14 @@ def parser():
 
 # Data generation
 # -------------------------------------
-def generate_data_P(num_rows=5, num_cols=6, num_routes_per_od=4,
-                    num_nonzero_routes_per_o=10, prefix=''):
+def generate_data_P(nrow=5, ncol=6, nodroutes=4, nnz_oroutes=10, prefix='',
+                    NB=60, NS=20, NL=15, NLP=98):
     """
     Generate and export probabilistic matrices
     """
-    static_matrix.export_matrices(prefix,num_rows,num_cols,num_routes_per_od,
-                                  num_nonzero_routes_per_o)
+    static_matrix.export_matrices(prefix, nrow, ncol, nodroutes=nodroutes,
+                                  nnz_oroutes=nnz_oroutes, NB=NB, NS=NS, NL=NL,
+                                  NLP=NLP)
 
 def generate_data_UE(data=None, SO=False, trials=10, demand=3, N=10,
                      plot=False, withODs=False, prefix=''):
@@ -115,10 +116,10 @@ def experiment_LS(test):
     """
     ## LS experiment
     ## TODO: invoke solver
-    A, b, N, block_sizes, x_true, nz, flow, rsort_index = \
+    A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0 = \
         load_data('%s/%s' % (c.DATA_DIR,test), full=False, OD=True, CP=True,
-                  eq='OD',init=False)
-    x0 = np.array(util.block_e(block_sizes - 1, block_sizes))
+                  LP=True, eq='OD', init=True)
+    # x0 = np.array(util.block_e(block_sizes - 1, block_sizes))
 
     if args.noise:
         b_true = b
@@ -141,7 +142,7 @@ def LS_solve(A,b,x0,N,block_sizes,args):
     z0 = util.x2z(x0,block_sizes)
     target = A.dot(x0)-b
 
-    options = { 'max_iter': 100000,
+    options = { 'max_iter': 30000,
                 'verbose': 1,
                 'opt_tol' : 1e-30,
                 'suff_dec': 0.003, # FIXME unused
@@ -216,8 +217,9 @@ def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, is_x=False):
     print 'percent flow allocated incorrectly: %f' % per_flow
     print '0.5norm(Ax-b)^2: %8.5e\n0.5norm(Ax_init-b)^2: %8.5e' % \
           (error[-1], starting_error)
-    print '0.5norm(Ax*-b)^2: %8.5e\nmax|x-x_true|: %.2f\nmax|x_init-x_true|: %.2f\n\n\n' % \
-          (opt_error, dist_from_true, start_dist_from_true)
+    print '0.5norm(Ax*-b)^2: %8.5e' % opt_error
+    print 'max|f * (x-x_true)|: %.5f\nmax|f * (x_init-x_true)|: %.5f\n\n\n' % \
+          (dist_from_true, start_dist_from_true)
     sorted(enumerate(x_diff), key=lambda x: x[1])
     ipdb.set_trace()
     return x_last, error
@@ -240,8 +242,8 @@ if __name__ == "__main__":
     prefix = c.DATA_DIR + '/'
 
     # Generate data
-    # generate_data_P(prefix=prefix)
-    # print "Generated probabilistic data"
+    generate_data_P(prefix=prefix)
+    print "Generated probabilistic data"
     # TODO: what does this mean?
     # N0, N1, scale, regions, res, margin
     # data = (20, 40, 0.2, [((3.5, 0.5, 6.5, 3.0), 20)], (12,6), 2.0)
