@@ -13,7 +13,7 @@ from grid_model import create_model
 from grid_simulation import MCMC
 
 # Dependencies for least squares
-from python.util import load_data
+from python.util import load_data, load
 from python import util
 from python.c_extensions.simplex_projection import simplex_projection
 from python import BB, LBFGS, DORE, solvers
@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 from generate_graph import los_angeles
 from cvxopt import matrix
 from isttt2014_experiments import synthetic_data
+from linkpath import LinkPath
 import path_solver
 import Waypoints as WP
 import scipy.io
@@ -54,17 +55,18 @@ def parser():
 
 # Data generation
 # -------------------------------------
-def generate_data_P(nrow=5, ncol=6, nodroutes=4, nnz_oroutes=10, prefix='',
+def generate_data_P(nrow=5, ncol=6, nodroutes=4, nnz_oroutes=10,
                     NB=60, NS=20, NL=15, NLP=98):
     """
     Generate and export probabilistic matrices
     """
+    prefix = '%s/' % c.DATA_DIR
     static_matrix.export_matrices(prefix, nrow, ncol, nodroutes=nodroutes,
                                   nnz_oroutes=nnz_oroutes, NB=NB, NS=NS, NL=NL,
                                   NLP=NLP)
 
-def generate_data_UE(data=None, SO=False, trials=10, demand=3, N=10,
-                     plot=False, withODs=False, prefix=''):
+def generate_data_UE(data=None, SO=False, trials=10, demand=3, N=30,
+                     plot=False, withODs=False, NLP=122):
     """
     Generate and export UE matrices
     """
@@ -72,22 +74,27 @@ def generate_data_UE(data=None, SO=False, trials=10, demand=3, N=10,
     path='/Users/cathywu/Dropbox/PhD/traffic-estimation-wardrop/los_angeles_data_2.mat'
     g, x_true, l, path_wps, wp_trajs, obs = synthetic_data(data, SO, demand, N,
                                                            path=path)
+    x_true = to_np(x_true)
     obs=obs[0]
     A_full = path_solver.linkpath_incidence(g)
+    A = to_sp(A_full[obs,:])
+    A_full = to_sp(A_full)
     U,f = WP.simplex(g, wp_trajs, withODs)
     T,d = path_solver.simplex(g)
+
+    lp = LinkPath(g,x_true,N=NLP)
+    lp.update_lp_flows()
+    V,g = lp.simplex_lp()
+
     if not SO:
-        fname = 'UE_graph.mat'
+        fname = '%s/UE_graph.mat' % c.DATA_DIR
     else:
-        fname = "SO_graph.mat"
+        fname = '%s/SO_graph.mat' % c.DATA_DIR
     # Export
-    scipy.io.savemat(prefix + fname, {'A_full': to_sp(A_full),
-                                      'b_full': to_np(l),
-                                      'A': to_sp(A_full[obs,:]),
-                                      'b': to_np(l[obs]),
-                                      'x_true': to_np(x_true),
-                                      'T': to_sp(T),'d': to_np(d),
-                                      'U': to_sp(U), 'f': to_np(f)},
+    scipy.io.savemat(fname, {'A_full': A_full, 'b_full': A_full.dot(x_true),
+                             'A': A, 'b': A.dot(x_true), 'x_true': x_true,
+                             'T': to_sp(T), 'd': to_np(d),
+                             'U': to_sp(U), 'f': to_np(f), 'V': V, 'g': g},
                      oned_as='column')
 
 # Experimentation helper functions
@@ -105,8 +112,65 @@ def experiment_BI(test,sparse):
 def experiment_TA():
     pass
 
-def experiment_CS():
-    pass
+def experiment_CS(test):
+    # CS test config
+    CS_PATH = '/Users/cathywu/Dropbox/Fa13/EE227BT/traffic-project'
+    OUT_PATH = '%s/data/output-cathywu/' % CS_PATH
+
+    # Test parameters
+    # alg = 'cvx_random_sampling_L1_30_replace'
+    # alg = 'cvx_oracle'
+    alg = 'cvx_unconstrained_L1'
+    # alg = 'cvx_L2'
+    # alg = 'cvx_raw'
+    # alg = 'cvx_weighted_L1'
+    # alg = 'cvx_hot_start_lp'
+    # alg = 'cvx_single_block_L_infty'
+    # alg = 'cvx_random_sample_L_infty'
+    # alg = 'cvx_mult_blocks_L_infty'
+    # alg = 'cvx_block_descent_L_infty'
+    # alg = 'cvx_entropy'
+
+    # Load test and export to .mat
+    A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0 = \
+        load_data('%s/%s' % (c.DATA_DIR,test), full=True, OD=True, CP=True,
+                  LP=True, eq='OD', init=True)
+    fname = '%s/CS_%s' % (c.DATA_DIR,test)
+    scipy.io.savemat(fname, { 'A': A, 'b': b, 'x_true': x_true, 'flow' : flow,
+                              'x0': x0, 'block_sizes': block_sizes, 'nz': nz },
+                     oned_as='column')
+
+    # Perform test via MATLAB
+    from pymatbridge import Matlab
+    mlab = Matlab()
+    mlab.start()
+    mlab.run_code('cvx_solver mosek;')
+    mlab.run_code("addpath '~/mosek/7/toolbox/r2012a';")
+    p = mlab.run_func('%s/scenario_to_output.m' % CS_PATH,
+                      { 'filename' : fname, 'type' : test, 'algorithm' : alg,
+                        'outpath' : OUT_PATH })
+    mlab.stop()
+    x = np.array(p['result']).squeeze()
+
+    # Results
+    logging.debug("Shape of x_hat: %s" % repr(x.shape))
+    print 'A: (%s,%s)' % (A.shape)
+
+    opt_error = 0.5 * la.norm(A.dot(x_true)-b)**2
+    diff = A.dot(x) - b
+    error = 0.5 * diff.T.dot(diff)
+
+    x_diff = np.abs(x_true - x)
+    dist_from_true = np.max(x_diff)
+
+    print 'incorrect x entries: %s' % x_diff[x_diff > 1e-3].shape[0]
+    per_flow = np.sum(x_diff) / np.sum(x_true)
+    print 'percent flow allocated incorrectly: %f' % per_flow
+    print '0.5norm(Ax-b)^2: %8.5e' % error
+    print '0.5norm(Ax*-b)^2: %8.5e' % opt_error
+    print 'max|f * (x-x_true)|: %.5f\n\n\n' % \
+          (dist_from_true)
+    ipdb.set_trace()
 
 def experiment_LS(test):
     """
@@ -117,8 +181,8 @@ def experiment_LS(test):
     ## LS experiment
     ## TODO: invoke solver
     A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0 = \
-        load_data('%s/%s' % (c.DATA_DIR,test), full=False, OD=True, CP=True,
-                  LP=True, eq='OD', init=True)
+        load_data('%s/%s' % (c.DATA_DIR,test), full=True, OD=True, CP=True,
+                  LP=True, eq='CP', init=True)
     # x0 = np.array(util.block_e(block_sizes - 1, block_sizes))
 
     if args.noise:
@@ -142,7 +206,7 @@ def LS_solve(A,b,x0,N,block_sizes,args):
     z0 = util.x2z(x0,block_sizes)
     target = A.dot(x0)-b
 
-    options = { 'max_iter': 30000,
+    options = { 'max_iter': 300000,
                 'verbose': 1,
                 'opt_tol' : 1e-30,
                 'suff_dec': 0.003, # FIXME unused
@@ -185,7 +249,7 @@ def LS_solve(A,b,x0,N,block_sizes,args):
 
         DORE.solve(z0, lambda z: A_dore.dot(N.dot(z)),
                    lambda b: N.T.dot(A_dore.T.dot(b)), target_dore, proj=proj,
-                   log=log,options=options)
+                   log=log,options=options,record_every=100)
         A_dore = None
     logging.debug('Stopping %s solver...' % args.solver)
     return iters, times, states
@@ -201,6 +265,7 @@ def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, is_x=False):
 
     logging.debug("Shape of x0: %s" % repr(x0.shape))
     logging.debug("Shape of x_hat: %s" % repr(x_hat.shape))
+    print 'A: %s, blocks: %s' % (A.shape, block_sizes.shape)
 
     starting_error = 0.5 * la.norm(A.dot(x0)-b)**2
     opt_error = 0.5 * la.norm(A.dot(x_true)-b)**2
@@ -211,7 +276,6 @@ def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, is_x=False):
     dist_from_true = np.max(flow * x_diff)
     start_dist_from_true = np.max(flow * np.abs(x_last-x0))
 
-    print 'A: %s, blocks: %s' % (A.shape, block_sizes.shape)
     print 'incorrect x entries: %s' % x_diff[x_diff > 1e-3].shape[0]
     per_flow = np.sum(flow * x_diff) / np.sum(flow * x_true)
     print 'percent flow allocated incorrectly: %f' % per_flow
@@ -239,27 +303,26 @@ if __name__ == "__main__":
         logging.basicConfig(level=eval('logging.'+args.log))
     logging.info('testing')
 
-    prefix = c.DATA_DIR + '/'
-
     # Generate data
-    generate_data_P(prefix=prefix)
-    print "Generated probabilistic data"
+    # generate_data_P()
+    # print "Generated probabilistic data"
     # TODO: what does this mean?
     # N0, N1, scale, regions, res, margin
     # data = (20, 40, 0.2, [((3.5, 0.5, 6.5, 3.0), 20)], (12,6), 2.0)
     data = (5, 10, 0.2, [((3.5, 0.5, 6.5, 3.0), 5)], (6,3), 2.0)
-    # generate_data_UE(data=data, prefix=prefix)
-    # generate_data_UE(data=data, SO=True, prefix=prefix)
+    # generate_data_UE(data=data)
+    # generate_data_UE(data=data, SO=True)
     # print "Generated equilibrium data"
 
     sparse = False
     # test = 'UE_graph.mat'
     test = 'small_graph_OD.mat'
     # experiment_BI(test,sparse)
-    experiment_LS(test)
+    # experiment_LS(test)
 
     ## CS experiment
     ## TODO: invoke matlab?
+    experiment_CS(test)
 
     ## TA experiment
     ## TODO: invoke matlab or cvxopt?
