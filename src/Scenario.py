@@ -9,11 +9,11 @@ import config as c
 from grid_networks import static_matrix
 
 # Dependencies for Bayesian inference
-from grid_model import create_model
+from grid_model import load_model, create_model
 from grid_simulation import MCMC
 
 # Dependencies for least squares
-from python.util import load_data, load
+from python.util import load_data, solver_input
 from python import util
 from python.c_extensions.simplex_projection import simplex_projection
 from python import BB, LBFGS, DORE, solvers
@@ -43,29 +43,57 @@ def to_sp(X):
 
 def parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file', help='Data file (*.mat)',
-                        default='route_assignment_matrices_ntt.mat')
     parser.add_argument('--log', dest='log', nargs='?', const='INFO',
                         default='WARN', help='Set log level (default: WARN)')
-    parser.add_argument('--solver',dest='solver',type=str,default='BB',
-                        help='Solver name')
+    parser.add_argument('--solver',dest='solver',type=str,default='LS',
+                        help='Solver name') # CS/BI/LS
     parser.add_argument('--noise',dest='noise',type=float,default=None,
                         help='Noise level')
+
+    # LS solver only
+    parser.add_argument('--method',dest='solver',type=str,default='BB',
+                        help='LS only: Least squares method')
+    parser.add_argument('--init',dest='init',type=bool,default=False,
+                        help='LS only: initial solution from data')
+
+    # Sparsity
+    parser.add_argument('--sparse',dest='sparse',type=bool,default=False,
+                        help='BI/P only: Sparse toggle for route flow sampling')
+
+    # Linkpath and cellpath sensing
+    parser.add_argument('--NLP',dest='NLP',type=int,default=None,
+                        help='Number of linkpath sensors (sampled uniformly)')
+    parser.add_argument('--NB',dest='NB',type=int,default=60,
+                        help='Number of cells sampled uniformly in bbox')
+    parser.add_argument('--NS',dest='NS',type=int,default=0,
+                        help='Number of cells sampled uniformly in region')
+    parser.add_argument('--NL',dest='NL',type=int,default=30,
+                        help='Number of cells sampled uniformly in links')
+
+    # P model only
+    parser.add_argument('--nrow',dest='nrow',type=int,default=4,
+                        help='P only: Number of rows in grid network')
+    parser.add_argument('--ncol',dest='ncol',type=int,default=6,
+                        help='P only: Number of rows in grid network')
+    parser.add_argument('--nodroutes',dest='nodroutes',type=int,default=15,
+                        help='P only: Number of routes per OD pair')
     return parser
 
 # Data generation
 # -------------------------------------
 def generate_data_P(nrow=5, ncol=6, nodroutes=4, nnz_oroutes=10,
-                    NB=60, NS=20, NL=15, NLP=98):
+                    NB=60, NS=20, NL=15, NLP=98, type='small_graph_OD.mat'):
     """
     Generate and export probabilistic matrices
     """
     prefix = '%s/' % c.DATA_DIR
-    static_matrix.export_matrices(prefix, nrow, ncol, nodroutes=nodroutes,
+    data = static_matrix.export_matrices(prefix, nrow, ncol, nodroutes=nodroutes,
                                   nnz_oroutes=nnz_oroutes, NB=NB, NS=NS, NL=NL,
-                                  NLP=NLP)
+                                  NLP=NLP, export=False, type=type)
+    return data
+    # FIXME return data
 
-def generate_data_UE(data=None, SO=False, trials=10, demand=3, N=30,
+def generate_data_UE(data=None, export=False, SO=False, trials=10, demand=3, N=30,
                      plot=False, withODs=False, NLP=122):
     """
     Generate and export UE matrices
@@ -82,28 +110,37 @@ def generate_data_UE(data=None, SO=False, trials=10, demand=3, N=30,
     U,f = WP.simplex(g, wp_trajs, withODs)
     T,d = path_solver.simplex(g)
 
-    lp = LinkPath(g,x_true,N=NLP)
-    lp.update_lp_flows()
-    V,g = lp.simplex_lp()
+    data = {'A_full': A_full, 'b_full': A_full.dot(x_true),
+            'A': A, 'b': A.dot(x_true), 'x_true': x_true,
+            'T': to_sp(T), 'd': to_np(d),
+            'U': to_sp(U), 'f': to_np(f) }
 
-    if not SO:
-        fname = '%s/UE_graph.mat' % c.DATA_DIR
-    else:
-        fname = '%s/SO_graph.mat' % c.DATA_DIR
+    if NLP is not None:
+        lp = LinkPath(g,x_true,N=NLP)
+        lp.update_lp_flows()
+        V,g = lp.simplex_lp()
+        data['V'], data['g'] = V, g
+
     # Export
-    scipy.io.savemat(fname, {'A_full': A_full, 'b_full': A_full.dot(x_true),
-                             'A': A, 'b': A.dot(x_true), 'x_true': x_true,
-                             'T': to_sp(T), 'd': to_np(d),
-                             'U': to_sp(U), 'f': to_np(f), 'V': V, 'g': g},
-                     oned_as='column')
+    if export:
+        if not SO:
+            fname = '%s/UE_graph.mat' % c.DATA_DIR
+        else:
+            fname = '%s/SO_graph.mat' % c.DATA_DIR
+        scipy.io.savemat(fname, data, oned_as='column')
+
+    return data
 
 # Experimentation helper functions
 # -------------------------------------
-def experiment_BI(test,sparse):
+def experiment_BI(sparse,test=None,data=None):
     """
     Bayesian inference experiment
     """
-    model = create_model('%s/%s' % (c.DATA_DIR,test),sparse, OD=True, CP=True)
+    if data is None and test is not None:
+        model = load_model('%s/%s' % (c.DATA_DIR,test),sparse, OD=True, CP=True)
+    else:
+        model = create_model(data, sparse, OD=True, CP=True)
 
     # model = create_model('%s/%s' % (c.DATA_DIR,test),sparse)
 
@@ -112,7 +149,7 @@ def experiment_BI(test,sparse):
 def experiment_TA():
     pass
 
-def experiment_CS(test):
+def experiment_CS(test=None, data=None):
     # CS test config
     CS_PATH = '/Users/cathywu/Dropbox/Fa13/EE227BT/traffic-project'
     OUT_PATH = '%s/data/output-cathywu/' % CS_PATH
@@ -154,7 +191,7 @@ def experiment_CS(test):
 
     # Results
     logging.debug("Shape of x_hat: %s" % repr(x.shape))
-    print 'A: (%s,%s)' % (A.shape)
+    logging.debug('A: (%s,%s)' % (A.shape))
 
     opt_error = 0.5 * la.norm(A.dot(x_true)-b)**2
     diff = A.dot(x) - b
@@ -172,7 +209,8 @@ def experiment_CS(test):
           (dist_from_true)
     ipdb.set_trace()
 
-def experiment_LS(test):
+def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
+                    LP=True, eq='CP', init=True):
     """
     Least squares experiment
     :param test:
@@ -180,9 +218,14 @@ def experiment_LS(test):
     """
     ## LS experiment
     ## TODO: invoke solver
-    A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0 = \
-        load_data('%s/%s' % (c.DATA_DIR,test), full=True, OD=True, CP=True,
-                  LP=True, eq='CP', init=True)
+    if data is None and test is not None:
+        fname = '%s/%s' % (c.DATA_DIR,test)
+        A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0 = \
+            load_data(fname, full=full, OD=OD, CP=CP, LP=LP, eq=eq, init=init)
+    else:
+        A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0 = \
+            solver_input(data, full=full, OD=OD, CP=CP, LP=LP, eq=eq, init=init)
+
     # x0 = np.array(util.block_e(block_sizes - 1, block_sizes))
 
     if args.noise:
@@ -194,13 +237,16 @@ def experiment_LS(test):
     # z0 = np.zeros(N.shape[1])
     if (block_sizes-1).any() == False:
         iters, times, states = [0],[0],[x0]
-        x_last, error = LS_postprocess(states,x0,A,b,x_true,N,block_sizes,flow,is_x=True)
+        x_last, error = LS_postprocess(states,x0,A,b,x_true,N,block_sizes,flow,
+                                       is_x=True)
     else:
         iters, times, states = LS_solve(A,b,x0,N,block_sizes,args)
-        x_last, error = LS_postprocess(states,x0,A,b,x_true,N,block_sizes,flow)
+        x_last, error, output = LS_postprocess(states,x0,A,b,x_true,N,block_sizes,flow)
 
     LS_plot(x_last, times, error)
-    return iters, times, states
+
+    output['iters'], output['times'], output['states'] = iters, times, states
+    return output
 
 def LS_solve(A,b,x0,N,block_sizes,args):
     z0 = util.x2z(x0,block_sizes)
@@ -231,15 +277,15 @@ def LS_solve(A,b,x0,N,block_sizes,args):
         start = time.time()
         return start
 
-    logging.debug('Starting %s solver...' % args.solver)
-    if args.solver == 'LBFGS':
+    logging.debug('Starting %s solver...' % args.method)
+    if args.method == 'LBFGS':
         LBFGS.solve(z0+1, f, nabla_f, solvers.stopping, log=log,proj=proj,
                     options=options)
         logging.debug("Took %s time" % str(np.sum(times)))
-    elif args.solver == 'BB':
+    elif args.method == 'BB':
         BB.solve(z0,f,nabla_f,solvers.stopping,log=log,proj=proj,
                  options=options)
-    elif args.solver == 'DORE':
+    elif args.method == 'DORE':
         # setup for DORE
         alpha = 0.99
         lsv = util.lsv_operator(A, N)
@@ -251,11 +297,11 @@ def LS_solve(A,b,x0,N,block_sizes,args):
                    lambda b: N.T.dot(A_dore.T.dot(b)), target_dore, proj=proj,
                    log=log,options=options,record_every=100)
         A_dore = None
-    logging.debug('Stopping %s solver...' % args.solver)
+    logging.debug('Stopping %s solver...' % args.method)
     return iters, times, states
 
-
 def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, is_x=False):
+    output = {}
     d = len(states)
     if not is_x:
         x_hat = N.dot(np.array(states).T) + np.tile(x0,(d,1)).T
@@ -265,7 +311,9 @@ def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, is_x=False):
 
     logging.debug("Shape of x0: %s" % repr(x0.shape))
     logging.debug("Shape of x_hat: %s" % repr(x_hat.shape))
-    print 'A: %s, blocks: %s' % (A.shape, block_sizes.shape)
+    logging.debug('A: %s, blocks: %s' % (A.shape, block_sizes.shape))
+    output['A'] = A.shape
+    output['blocks'] = block_sizes.shape
 
     starting_error = 0.5 * la.norm(A.dot(x0)-b)**2
     opt_error = 0.5 * la.norm(A.dot(x_true)-b)**2
@@ -276,17 +324,23 @@ def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, is_x=False):
     dist_from_true = np.max(flow * x_diff)
     start_dist_from_true = np.max(flow * np.abs(x_last-x0))
 
-    print 'incorrect x entries: %s' % x_diff[x_diff > 1e-3].shape[0]
+    logging.debug('incorrect x entries: %s' % x_diff[x_diff > 1e-3].shape[0])
+    output['incorrect x entries'] = x_diff[x_diff > 1e-3].shape[0]
     per_flow = np.sum(flow * x_diff) / np.sum(flow * x_true)
-    print 'percent flow allocated incorrectly: %f' % per_flow
-    print '0.5norm(Ax-b)^2: %8.5e\n0.5norm(Ax_init-b)^2: %8.5e' % \
-          (error[-1], starting_error)
-    print '0.5norm(Ax*-b)^2: %8.5e' % opt_error
-    print 'max|f * (x-x_true)|: %.5f\nmax|f * (x_init-x_true)|: %.5f\n\n\n' % \
-          (dist_from_true, start_dist_from_true)
+    logging.debug('percent flow allocated incorrectly: %f' % per_flow)
+    output['percent flow allocated incorrectly'] = per_flow
+    logging.debug('0.5norm(Ax-b)^2: %8.5e\n0.5norm(Ax_init-b)^2: %8.5e' % \
+          (error[-1], starting_error))
+    output['0.5norm(Ax-b)^2'], output['0.5norm(Ax_init-b)^2'] = error[-1], starting_error
+    logging.debug('0.5norm(Ax*-b)^2: %8.5e' % opt_error)
+    output['0.5norm(Ax*-b)^2'] = opt_error
+    logging.debug('max|f * (x-x_true)|: %.5f\nmax|f * (x_init-x_true)|: %.5f\n\n\n' % \
+          (dist_from_true, start_dist_from_true))
+    output['max|f * (x-x_true)|'], output['max|f * (x_init-x_true)|'] = \
+        dist_from_true, start_dist_from_true
     sorted(enumerate(x_diff), key=lambda x: x[1])
     ipdb.set_trace()
-    return x_last, error
+    return x_last, error, output
 
 def LS_plot(x_last, times, error):
     plt.figure()
@@ -296,6 +350,71 @@ def LS_plot(x_last, times, error):
     plt.loglog(np.cumsum(times),error)
     plt.show()
 
+def update_args(args, params):
+    """
+    Update argparse object with attributes from params dictionary
+    :param args:
+    :param params:
+    :return:
+    """
+    args.model = params['model'] # P/UE/SO
+    args.sparse = bool(params['sparse']) # sparse toggle for route flow sampling
+
+    # Sensor configurations
+    args.NLP = int(params['NLP']) # number of linkpath sensors (sampled randomly)
+    args.NB = int(params['NB'])   # number of cells sampled uniformly in bbox
+    args.NS = int(params['NS'])   # number of cells sampled uniformly in region
+    args.NL = int(params['NL'])   # number of cells sampled uniformly in links
+
+    if args.model == 'P':
+        # For --model P only:
+        args.nrow = int(params['nrow']) # number of rows in grid network
+        args.ncol = int(params['ncol']) # number of cols in grid network
+        args.nodroutes = int(params['nodroutes']) # number of routes per OD pair
+
+    if args.solver == 'LS':
+        # For --solver LS only:
+        args.method = params['method'] # BB/LBFGS/DORE
+        args.init = bool(params['init']) # True/False
+
+    return args
+
+def scenario(params, log='INFO'):
+    # use argparse object as default template
+    p = parser()
+    args = p.parse_args()
+    if args.log in c.ACCEPTED_LOG_LEVELS:
+        logging.basicConfig(level=eval('logging.'+args.log))
+    args = update_args(args, params)
+
+    if args.model == 'P':
+        type = 'small_graph_OD.mat' if args.sparse else 'small_graph_OD_dense.mat'
+
+        data = generate_data_P(nrow=args.nrow, ncol=args.ncol,
+                               nodroutes=args.nodroutes,
+                               NB=args.NB, NL=args.NL, NLP=args.NLP,
+                               type=type)
+    else:
+        SO = True if args.model == 'SO' else False
+        # N0, N1, scale, regions, res, margin
+        config = (args.NB, args.NL, 0.2, [((3.5, 0.5, 6.5, 3.0), args.NS)], (6,3), 2.0)
+        # data[0] = (20, 40, 0.2, [((3.5, 0.5, 6.5, 3.0), 20)], (12,6), 2.0)
+        # data[1] = (10, 20, 0.2, [((3.5, 0.5, 6.5, 3.0), 10)], (10,5), 2.0)
+        # data[2] = (5, 10, 0.2, [((3.5, 0.5, 6.5, 3.0), 5)], (6,3), 2.0)
+        # data[3] = (3, 5, 0.2, [((3.5, 0.5, 6.5, 3.0), 2)], (4,2), 2.0)
+        # data[4] = (1, 3, 0.2, [((3.5, 0.5, 6.5, 3.0), 1)], (2,2), 2.0)
+        # TODO trials?
+        data = generate_data_UE(data=config, SO=SO, NLP=args.NLP)
+
+    if args.solver == 'CS':
+        output = experiment_CS(test=type, data=data)
+    elif args.solver == 'BI':
+        output = experiment_BI(sparse, data=data)
+    elif args.solver == 'LS':
+        output = experiment_LS(args, data=data)
+
+    return output
+
 if __name__ == "__main__":
     p = parser()
     args = p.parse_args()
@@ -303,26 +422,27 @@ if __name__ == "__main__":
         logging.basicConfig(level=eval('logging.'+args.log))
     logging.info('testing')
 
+    test = 'small_graph_OD.mat'
+
     # Generate data
-    # generate_data_P()
+    data = generate_data_P(type=test)
     # print "Generated probabilistic data"
     # TODO: what does this mean?
     # N0, N1, scale, regions, res, margin
     # data = (20, 40, 0.2, [((3.5, 0.5, 6.5, 3.0), 20)], (12,6), 2.0)
-    data = (5, 10, 0.2, [((3.5, 0.5, 6.5, 3.0), 5)], (6,3), 2.0)
+    config = (5, 10, 0.2, [((3.5, 0.5, 6.5, 3.0), 5)], (6,3), 2.0)
     # generate_data_UE(data=data)
-    # generate_data_UE(data=data, SO=True)
+    # data = generate_data_UE(data=config, SO=True)
     # print "Generated equilibrium data"
 
     sparse = False
     # test = 'UE_graph.mat'
-    test = 'small_graph_OD.mat'
     # experiment_BI(test,sparse)
-    # experiment_LS(test)
+    iters, times, states, output = experiment_LS(test,args,data=data)
 
     ## CS experiment
     ## TODO: invoke matlab?
-    experiment_CS(test)
+    # experiment_CS(test)
 
     ## TA experiment
     ## TODO: invoke matlab or cvxopt?
