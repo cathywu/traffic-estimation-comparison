@@ -45,39 +45,78 @@ def parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--log', dest='log', nargs='?', const='INFO',
                         default='WARN', help='Set log level (default: WARN)')
+    parser.add_argument('--output',dest='output',action='store_true',
+                        default=False,help='Print output toggle (false)')
+
     parser.add_argument('--solver',dest='solver',type=str,default='LS',
                         help='Solver name') # CS/BI/LS
+    parser.add_argument('--model',dest='model',type=str,default='P',
+                        help='Macro traffic dynamics model') # P/UE/SO
     parser.add_argument('--noise',dest='noise',type=float,default=None,
                         help='Noise level')
+    parser.add_argument('--all_links',dest='all_links',action='store_true',
+                        default=False,help='All links observed (false)')
 
     # LS solver only
-    parser.add_argument('--method',dest='solver',type=str,default='BB',
+    parser.add_argument('--method',dest='method',type=str,default='BB',
                         help='LS only: Least squares method')
-    parser.add_argument('--init',dest='init',type=bool,default=False,
-                        help='LS only: initial solution from data')
+    parser.add_argument('--init',dest='init',action='store_true',
+                    default=False,help='LS only: initial solution from data')
 
     # Sparsity
-    parser.add_argument('--sparse',dest='sparse',type=bool,default=False,
-                        help='BI/P only: Sparse toggle for route flow sampling')
+    parser.add_argument('--sparse',dest='sparse',action='store_true',
+        default=False,help='BI/P only: Sparse toggle for route flow sampling')
 
     # Linkpath and cellpath sensing
-    parser.add_argument('--NLP',dest='NLP',type=int,default=None,
+    parser.add_argument('--NLP',dest='NLP',type=int,default=9,
                         help='Number of linkpath sensors (sampled uniformly)')
-    parser.add_argument('--NB',dest='NB',type=int,default=60,
+    parser.add_argument('--NB',dest='NB',type=int,default=48,
                         help='Number of cells sampled uniformly in bbox')
     parser.add_argument('--NS',dest='NS',type=int,default=0,
                         help='Number of cells sampled uniformly in region')
-    parser.add_argument('--NL',dest='NL',type=int,default=30,
+    parser.add_argument('--NL',dest='NL',type=int,default=9,
                         help='Number of cells sampled uniformly in links')
 
     # P model only
-    parser.add_argument('--nrow',dest='nrow',type=int,default=4,
+    parser.add_argument('--nrow',dest='nrow',type=int,default=3,
                         help='P only: Number of rows in grid network')
-    parser.add_argument('--ncol',dest='ncol',type=int,default=6,
+    parser.add_argument('--ncol',dest='ncol',type=int,default=4,
                         help='P only: Number of rows in grid network')
     parser.add_argument('--nodroutes',dest='nodroutes',type=int,default=15,
                         help='P only: Number of routes per OD pair')
     return parser
+
+def update_args(args, params):
+    """
+    Update argparse object with attributes from params dictionary
+    :param args:
+    :param params:
+    :return:
+    """
+    args.solver = params['solver'] # LS/BI/CS
+    args.model = params['model'] # P/UE/SO
+    args.sparse = bool(params['sparse']) # sparse toggle for route flow sampling
+    if 'all_links' in params:
+        args.all_links = bool(params['all_links'])
+
+    # Sensor configurations
+    args.NLP = int(params['NLP']) # number of linkpath sensors (sampled randomly)
+    args.NB = int(params['NB'])   # number of cells sampled uniformly in bbox
+    args.NS = int(params['NS'])   # number of cells sampled uniformly in region
+    args.NL = int(params['NL'])   # number of cells sampled uniformly in links
+
+    if args.model == 'P':
+        # For --model P only:
+        args.nrow = int(params['nrow']) # number of rows in grid network
+        args.ncol = int(params['ncol']) # number of cols in grid network
+        args.nodroutes = int(params['nodroutes']) # number of routes per OD pair
+
+    if args.solver == 'LS':
+        # For --solver LS only:
+        args.method = params['method'] # BB/LBFGS/DORE
+        args.init = bool(params['init']) # True/False
+
+    return args
 
 # Data generation
 # -------------------------------------
@@ -133,14 +172,15 @@ def generate_data_UE(data=None, export=False, SO=False, trials=10, demand=3, N=3
 
 # Experimentation helper functions
 # -------------------------------------
-def experiment_BI(sparse,test=None,data=None):
+def experiment_BI(sparse,full=False,test=None,data=None):
     """
     Bayesian inference experiment
     """
     if data is None and test is not None:
-        model = load_model('%s/%s' % (c.DATA_DIR,test),sparse, OD=True, CP=True)
+        model = load_model('%s/%s' % (c.DATA_DIR,test),sparse, full=full,
+                           OD=True, CP=True)
     else:
-        model = create_model(data, sparse, OD=True, CP=True)
+        model = create_model(data, sparse, full=full, OD=True, CP=True)
 
     # model = create_model('%s/%s' % (c.DATA_DIR,test),sparse)
 
@@ -149,7 +189,7 @@ def experiment_BI(sparse,test=None,data=None):
 def experiment_TA():
     pass
 
-def experiment_CS(test=None, data=None):
+def experiment_CS(test=None, full=False, data=None):
     # CS test config
     CS_PATH = '/Users/cathywu/Dropbox/Fa13/EE227BT/traffic-project'
     OUT_PATH = '%s/data/output-cathywu/' % CS_PATH
@@ -170,7 +210,7 @@ def experiment_CS(test=None, data=None):
 
     # Load test and export to .mat
     A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0 = \
-        load_data('%s/%s' % (c.DATA_DIR,test), full=True, OD=True, CP=True,
+        load_data('%s/%s' % (c.DATA_DIR,test), full=full, OD=True, CP=True,
                   LP=True, eq='OD', init=True)
     fname = '%s/CS_%s' % (c.DATA_DIR,test)
     scipy.io.savemat(fname, { 'A': A, 'b': b, 'x_true': x_true, 'flow' : flow,
@@ -216,6 +256,7 @@ def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
     :param test:
     :return:
     """
+    output = {}
     ## LS experiment
     ## TODO: invoke solver
     if data is None and test is not None:
@@ -237,15 +278,17 @@ def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
     # z0 = np.zeros(N.shape[1])
     if (block_sizes-1).any() == False:
         iters, times, states = [0],[0],[x0]
-        x_last, error = LS_postprocess(states,x0,A,b,x_true,N,block_sizes,flow,
-                                       is_x=True)
+        x_last, error, output = LS_postprocess(states,x0,A,b,x_true,N,
+                                               block_sizes,flow,output=output,
+                                               is_x=True)
     else:
         iters, times, states = LS_solve(A,b,x0,N,block_sizes,args)
-        x_last, error, output = LS_postprocess(states,x0,A,b,x_true,N,block_sizes,flow)
+        x_last, error, output = LS_postprocess(states,x0,A,b,x_true,N,
+                                               block_sizes,flow,output=output)
 
-    LS_plot(x_last, times, error)
+    # LS_plot(x_last, times, error)
 
-    output['iters'], output['times'], output['states'] = iters, times, states
+    output['iters'], output['times'], output['states'] = list(iters), list(times), states
     return output
 
 def LS_solve(A,b,x0,N,block_sizes,args):
@@ -300,8 +343,10 @@ def LS_solve(A,b,x0,N,block_sizes,args):
     logging.debug('Stopping %s solver...' % args.method)
     return iters, times, states
 
-def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, is_x=False):
-    output = {}
+def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, output=None,
+                   is_x=False):
+    if output is None:
+        output = {}
     d = len(states)
     if not is_x:
         x_hat = N.dot(np.array(states).T) + np.tile(x0,(d,1)).T
@@ -339,7 +384,7 @@ def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, is_x=False):
     output['max|f * (x-x_true)|'], output['max|f * (x_init-x_true)|'] = \
         dist_from_true, start_dist_from_true
     sorted(enumerate(x_diff), key=lambda x: x[1])
-    ipdb.set_trace()
+    # ipdb.set_trace()
     return x_last, error, output
 
 def LS_plot(x_last, times, error):
@@ -350,42 +395,16 @@ def LS_plot(x_last, times, error):
     plt.loglog(np.cumsum(times),error)
     plt.show()
 
-def update_args(args, params):
-    """
-    Update argparse object with attributes from params dictionary
-    :param args:
-    :param params:
-    :return:
-    """
-    args.model = params['model'] # P/UE/SO
-    args.sparse = bool(params['sparse']) # sparse toggle for route flow sampling
-
-    # Sensor configurations
-    args.NLP = int(params['NLP']) # number of linkpath sensors (sampled randomly)
-    args.NB = int(params['NB'])   # number of cells sampled uniformly in bbox
-    args.NS = int(params['NS'])   # number of cells sampled uniformly in region
-    args.NL = int(params['NL'])   # number of cells sampled uniformly in links
-
-    if args.model == 'P':
-        # For --model P only:
-        args.nrow = int(params['nrow']) # number of rows in grid network
-        args.ncol = int(params['ncol']) # number of cols in grid network
-        args.nodroutes = int(params['nodroutes']) # number of routes per OD pair
-
-    if args.solver == 'LS':
-        # For --solver LS only:
-        args.method = params['method'] # BB/LBFGS/DORE
-        args.init = bool(params['init']) # True/False
-
-    return args
-
-def scenario(params, log='INFO'):
+def scenario(params=None, log='INFO'):
     # use argparse object as default template
     p = parser()
     args = p.parse_args()
     if args.log in c.ACCEPTED_LOG_LEVELS:
         logging.basicConfig(level=eval('logging.'+args.log))
-    args = update_args(args, params)
+    if params is not None:
+        args = update_args(args, params)
+
+    print args
 
     if args.model == 'P':
         type = 'small_graph_OD.mat' if args.sparse else 'small_graph_OD_dense.mat'
@@ -394,6 +413,8 @@ def scenario(params, log='INFO'):
                                nodroutes=args.nodroutes,
                                NB=args.NB, NL=args.NL, NLP=args.NLP,
                                type=type)
+        if 'error' in data:
+            return {'error' : data['error']}
     else:
         SO = True if args.model == 'SO' else False
         # N0, N1, scale, regions, res, margin
@@ -405,40 +426,23 @@ def scenario(params, log='INFO'):
         # data[4] = (1, 3, 0.2, [((3.5, 0.5, 6.5, 3.0), 1)], (2,2), 2.0)
         # TODO trials?
         data = generate_data_UE(data=config, SO=SO, NLP=args.NLP)
+        if 'error' in data:
+            return {'error' : data['error']}
 
     if args.solver == 'CS':
-        output = experiment_CS(test=type, data=data)
+        output = experiment_CS(test=type, full=args.all_links, data=data)
     elif args.solver == 'BI':
-        output = experiment_BI(sparse, data=data)
+        output = experiment_BI(args.sparse, full=args.all_links, data=data)
     elif args.solver == 'LS':
-        output = experiment_LS(args, data=data)
+        output = experiment_LS(args, full=args.all_links, data=data)
+
+    if args.output == True:
+        print output
 
     return output
 
 if __name__ == "__main__":
-    p = parser()
-    args = p.parse_args()
-    if args.log in c.ACCEPTED_LOG_LEVELS:
-        logging.basicConfig(level=eval('logging.'+args.log))
-    logging.info('testing')
-
-    test = 'small_graph_OD.mat'
-
-    # Generate data
-    data = generate_data_P(type=test)
-    # print "Generated probabilistic data"
-    # TODO: what does this mean?
-    # N0, N1, scale, regions, res, margin
-    # data = (20, 40, 0.2, [((3.5, 0.5, 6.5, 3.0), 20)], (12,6), 2.0)
-    config = (5, 10, 0.2, [((3.5, 0.5, 6.5, 3.0), 5)], (6,3), 2.0)
-    # generate_data_UE(data=data)
-    # data = generate_data_UE(data=config, SO=True)
-    # print "Generated equilibrium data"
-
-    sparse = False
-    # test = 'UE_graph.mat'
-    # experiment_BI(test,sparse)
-    iters, times, states, output = experiment_LS(test,args,data=data)
+    output = scenario()
 
     ## CS experiment
     ## TODO: invoke matlab?
