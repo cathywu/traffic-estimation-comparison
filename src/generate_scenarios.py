@@ -24,6 +24,29 @@ def test_all_sampled(outfile='scenarios_all_sampled.txt'):
 
     return scenarios
 
+def test_bayesian_inference(outfile='scenarios_bayesian_inference.txt',n=16):
+    iterations = 1
+    solvers = ['BI']
+    proportions = [0.5, 1]
+    EQ_NLP_max, EQ_NB_max, EQ_NS_max, EQ_NL_max = 122, 128, 128, 128
+    nrow_min, nrow_max, ncol_min, ncol_max, row_step, col_step = 1,11,2,11,3,2
+
+    some = test_basic(iterations=iterations,proportions=proportions,
+                      solvers=solvers,nrow_min=nrow_min,nrow_max=nrow_max,
+                      row_step=row_step,ncol_min=ncol_min,
+                      ncol_max=ncol_max,col_step=col_step,
+                      EQ_NLP_max=EQ_NLP_max,EQ_NB_max=EQ_NB_max,
+                      EQ_NS_max=EQ_NB_max,EQ_NL_max=EQ_NL_max)
+    scenarios = random.sample(some,n)
+
+    for s in scenarios:
+        check_scenario(s)
+
+    if outfile is not None:
+        dump(scenarios,outfile)
+
+    return scenarios
+
 def test_all_links(outfile='scenarios_all_links.txt',n=100):
     """
     Test performance of solvers under the condition where all links are observed
@@ -215,7 +238,30 @@ def test_small(outfile='scenarios_small.txt'):
 
     return scenarios
 
+def test_test(outfile='scenarios_test.txt'):
+    """
+    For testing that EC2 instance setup is working
+    :return:
+    """
+    scenarios = []
+
+    scenarios.extend(test_bayesian_inference(outfile=None,n=3))
+    scenarios.extend(random.sample(test_all(outfile=None),5))
+    scenarios.extend(test_all_links(outfile=None, n=3))
+    scenarios.extend(test_least_squares(outfile=None,n=10))
+
+    for s in scenarios:
+        check_scenario(s)
+
+    if outfile is not None:
+        dump(scenarios,outfile)
+
+    return scenarios
+
+
 if __name__ == "__main__":
+    test_test()
+    test_bayesian_inference()
     test_small()
     test_least_squares()
     test_all()
