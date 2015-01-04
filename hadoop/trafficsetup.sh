@@ -2,7 +2,7 @@
 
 cd ~
 mkdir traffic
-cd traffic
+pushd traffic
 
 git clone https://github.com/cathywu/traffic-estimation-comparison
 git clone https://github.com/cathywu/synthetic-traffic
@@ -19,6 +19,8 @@ pip install numpy
 pip install scipy
 pip install ipython networkx cvxopt scikit-learn pymc matplotlib
 
-cd traffic-estimation/python/c_extensions
-
+pushd traffic-estimation/python/c_extensions
 python2.7 setup.py build_ext --inplace
+
+popd
+popd

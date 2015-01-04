@@ -1,4 +1,5 @@
-import simplejson as json
+#!/usr/bin/env python
+import json
 import numpy as np
 import random
 
