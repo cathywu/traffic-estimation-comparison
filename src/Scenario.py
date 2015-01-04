@@ -357,7 +357,7 @@ def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, output=None,
     logging.debug("Shape of x0: %s" % repr(x0.shape))
     logging.debug("Shape of x_hat: %s" % repr(x_hat.shape))
     logging.debug('A: %s, blocks: %s' % (A.shape, block_sizes.shape))
-    output['A'] = A.shape
+    output['AA'] = A.shape
     output['blocks'] = block_sizes.shape
 
     starting_error = 0.5 * la.norm(A.dot(x0)-b)**2

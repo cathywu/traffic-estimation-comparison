@@ -112,11 +112,11 @@ def test_basic(iterations=1,proportions=[1],solvers=['LS'],
                     ncols = range(ncol_min,ncol_max,col_step)
                     for nrow in nrows:
                         # FIXME correct for BI limitations
-                        if solver == 'BI' and nrow > 6:
+                        if solver == 'BI' and nrow > 4:
                             continue
                         # FIXME correct for BI limitations
                         for ncol in ncols:
-                            if solver == 'BI' and ncol > 6:
+                            if solver == 'BI' and ncol > 4:
                                 continue
                             s['nrow'], s['ncol'] = nrow, ncol
                             s['nodroutes'] = 15 # FIXME more configurations?
