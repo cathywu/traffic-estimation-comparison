@@ -138,7 +138,7 @@ def generate_data_UE(data=None, export=False, SO=False, trials=10, demand=3, N=3
     Generate and export UE matrices
     """
     # FIXME copy mat file to local directory?
-    path='/Users/cathywu/Dropbox/PhD/traffic-estimation-wardrop/los_angeles_data_2.mat'
+    path='hadoop/los_angeles_data_2.mat'
     g, x_true, l, path_wps, wp_trajs, obs = synthetic_data(data, SO, demand, N,
                                                            path=path)
     x_true = to_np(x_true)
