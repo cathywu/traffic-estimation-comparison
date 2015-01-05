@@ -173,7 +173,7 @@ def test_all(CS_only=False,outfile='scenarios_all.txt'):
     :param outfile:
     :return:
     """
-    iterations = 5
+    iterations = 100
     solvers = ['CS'] if CS_only else ['LS','BI']
     proportions = [0.1, 0.18, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9, 0.95, 1]
     EQ_NLP_max, EQ_NB_max, EQ_NS_max, EQ_NL_max = 122, 128, 128, 128
@@ -245,10 +245,10 @@ def test_test(outfile='scenarios_test.txt'):
     """
     scenarios = []
 
-    scenarios.extend(test_bayesian_inference(outfile=None,n=3))
     scenarios.extend(random.sample(test_all(outfile=None),5))
     scenarios.extend(test_all_links(outfile=None, n=3))
     scenarios.extend(test_least_squares(outfile=None,n=10))
+    scenarios.extend(test_bayesian_inference(outfile=None,n=3))
 
     for s in scenarios:
         check_scenario(s)
@@ -263,7 +263,7 @@ if __name__ == "__main__":
     test_test()
     test_bayesian_inference()
     test_small()
-    test_least_squares()
     test_all()
-    test_all_links()
+    test_least_squares(n=1000)
+    test_all_links(n=1000)
     test_all_sampled()

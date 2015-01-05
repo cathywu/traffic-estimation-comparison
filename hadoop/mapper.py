@@ -19,6 +19,7 @@ def setup():
         path = '/Users/cathywu/Dropbox/PhD/traffic-estimation-comparison/src'
     elif name == 'ec2-user':
         path = '/home/ec2-user/traffic/traffic-estimation-comparison/src'
+        os.chdir("/home/ec2-user/traffic/traffic-estimation-comparison")
     else:
         path = '/home/hadoop/traffic-estimation-comparison/src'
     os.sys.path.insert(1,path)
