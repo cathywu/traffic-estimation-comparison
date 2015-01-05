@@ -14,20 +14,30 @@ xz -d Python-2.7.6.tar.xz
 tar -xvf Python-2.7.6.tar
 
 pushd Python-2.7.6
-./configure
+./configure --prefix=/usr/local --enable-unicode=ucs4 --enable-shared LDFLAGS="-Wl,-rpath /usr/local/lib"
 sudo make && sudo make altinstall
 popd
 
 export PATH="/usr/local/bin:$PATH"
 
 # Setup setuptools and pip
-wget --no-check-certificate https://pypi.python.org/packages/source/s/setuptools/setuptools-1.4.2.tar.gz
-tar -xvf setuptools-1.4.2.tar.gz
+wget --no-check-certificate https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py
+python2.7 ez_setup.py
+easy_install-2.7 pip
 
-pushd setuptools-1.4.2
+wget --no-check-certificate https://bootstrap.pypa.io/ez_setup.py
+python2.7 ez_setup.py --insecure
+
+wget --no-check-certificate https://pypi.python.org/packages/source/s/setuptools/setuptools-11.1.tar.gz
+tar -xvf setuptools-11.1.tar.gz
+
+pushd setuptools-11.1
 sudo chmod -R 777 /usr/local/
 python2.7 setup.py install
-curl https://raw.githubusercontent.com/pypa/pip/master/contrib/get-pip.py | python2.7 -
+
+# install pip
+easy_install-2.7 pip
+# curl https://raw.githubusercontent.com/pypa/pip/master/contrib/get-pip.py | python -
 popd
 
 # Setup virtualenv (though currently not used)
