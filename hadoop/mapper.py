@@ -36,6 +36,7 @@ def scenario(params):
 
 # input comes from STDIN (standard input)
 setup()
+import config as c
 import Scenario
 for line in sys.stdin:
     line = line.strip()
