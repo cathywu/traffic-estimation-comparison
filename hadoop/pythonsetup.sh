@@ -21,9 +21,9 @@ popd
 export PATH="/usr/local/bin:$PATH"
 
 # Setup setuptools and pip
-wget --no-check-certificate https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py
-python2.7 ez_setup.py
-easy_install-2.7 pip
+# wget --no-check-certificate https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py
+# python2.7 ez_setup.py
+# easy_install-2.7 pip
 
 wget --no-check-certificate https://bootstrap.pypa.io/ez_setup.py
 python2.7 ez_setup.py --insecure
@@ -34,11 +34,11 @@ tar -xvf setuptools-11.1.tar.gz
 pushd setuptools-11.1
 sudo chmod -R 777 /usr/local/
 python2.7 setup.py install
+popd
 
 # install pip
 easy_install-2.7 pip
 # curl https://raw.githubusercontent.com/pypa/pip/master/contrib/get-pip.py | python -
-popd
 
 # Setup virtualenv (though currently not used)
 pip install virtualenv
