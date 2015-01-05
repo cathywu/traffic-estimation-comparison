@@ -9,6 +9,7 @@ sudo yum install -y zlib-dev openssl-devel sqlite-devel bzip2-devel
 sudo yum install -y xz-libs
 
 # Setup Python 2.7 (default installed is 2.6)
+# http://toomuchdata.com/2014/02/16/how-to-install-python-on-centos/
 wget http://www.python.org/ftp/python/2.7.6/Python-2.7.6.tar.xz
 xz -d Python-2.7.6.tar.xz
 tar -xvf Python-2.7.6.tar
