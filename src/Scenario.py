@@ -184,7 +184,12 @@ def experiment_BI(sparse,full=False,test=None,data=None):
 
     # model = create_model('%s/%s' % (c.DATA_DIR,test),sparse)
 
-    trace = MCMC(model)
+    model, output = MCMC(model)
+    output['A'] = model.data.A.shape
+    output['T'] = model.data.T.shape
+    output['U'] = model.data.U.shape
+    output['alpha'] = model.data.alpha
+    return output
 
 def experiment_TA():
     pass
@@ -287,8 +292,9 @@ def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
                                                block_sizes,flow,output=output)
 
     # LS_plot(x_last, times, error)
+    output['duration'] = np.sum(times)
 
-    output['iters'], output['times'], output['states'] = list(iters), list(times), states
+    output['iters'], output['times'] = list(iters), list(times)
     return output
 
 def LS_solve(A,b,x0,N,block_sizes,args):
@@ -343,7 +349,7 @@ def LS_solve(A,b,x0,N,block_sizes,args):
     logging.debug('Stopping %s solver...' % args.method)
     return iters, times, states
 
-def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, output=None,
+def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, scaling, output=None,
                    is_x=False):
     if output is None:
         output = {}
@@ -353,6 +359,7 @@ def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, output=None,
     else:
         x_hat = np.array(states).T
     x_last = x_hat[:,-1]
+    n = x_hat.shape[1]
 
     logging.debug("Shape of x0: %s" % repr(x0.shape))
     logging.debug("Shape of x_hat: %s" % repr(x_hat.shape))
@@ -360,31 +367,45 @@ def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, flow, output=None,
     output['AA'] = A.shape
     output['blocks'] = block_sizes.shape
 
+    # Objective error, i.e. 0.5||Ax-b||_2^2
     starting_error = 0.5 * la.norm(A.dot(x0)-b)**2
     opt_error = 0.5 * la.norm(A.dot(x_true)-b)**2
     diff = A.dot(x_hat) - np.tile(b,(d,1)).T
     error = 0.5 * np.diag(diff.T.dot(diff))
-
-    x_diff = np.abs(x_true - x_last)
-    dist_from_true = np.max(flow * x_diff)
-    start_dist_from_true = np.max(flow * np.abs(x_last-x0))
-
-    logging.debug('incorrect x entries: %s' % x_diff[x_diff > 1e-3].shape[0])
-    output['incorrect x entries'] = x_diff[x_diff > 1e-3].shape[0]
-    per_flow = np.sum(flow * x_diff) / np.sum(flow * x_true)
-    logging.debug('percent flow allocated incorrectly: %f' % per_flow)
-    output['percent flow allocated incorrectly'] = per_flow
+    output['0.5norm(Ax-b)^2'], output['0.5norm(Ax_init-b)^2'] = error, starting_error
     logging.debug('0.5norm(Ax-b)^2: %8.5e\n0.5norm(Ax_init-b)^2: %8.5e' % \
-          (error[-1], starting_error))
-    output['0.5norm(Ax-b)^2'], output['0.5norm(Ax_init-b)^2'] = error[-1], starting_error
-    logging.debug('0.5norm(Ax*-b)^2: %8.5e' % opt_error)
+                  (error[-1], starting_error))
     output['0.5norm(Ax*-b)^2'] = opt_error
-    logging.debug('max|f * (x-x_true)|: %.5f\nmax|f * (x_init-x_true)|: %.5f\n\n\n' % \
-          (dist_from_true, start_dist_from_true))
-    output['max|f * (x-x_true)|'], output['max|f * (x_init-x_true)|'] = \
-        dist_from_true, start_dist_from_true
-    sorted(enumerate(x_diff), key=lambda x: x[1])
-    # ipdb.set_trace()
+    logging.debug('0.5norm(Ax*-b)^2: %8.5e' % opt_error)
+
+    # Route flow error, i.e ||x-x*||_1
+    x_true_block = np.tile(x_true,(n,1))
+    x_diff = x_true_block-x_hat.T
+
+    scaling_block = np.tile(scaling,(n,1))
+    x_diff_scaled = scaling_block * x_diff
+    x_true_scaled = scaling_block * x_true_block
+
+    # most incorrect entry (route flow)
+    dist_from_true = np.max(x_diff_scaled,axis=1)
+    logging.debug('max|f * (x-x_true)|: %.5f' % dist_from_true[-1])
+    output['max|f * (x-x_true)|'] = dist_from_true
+
+    # num incorrect entries
+    wrong = np.bincount(np.where(x_diff > 1e-3)[0])
+    output['incorrect x entries'] = wrong
+    logging.debug('incorrect x entries: %s' % wrong[-1])
+
+    # % route flow error
+    per_flow = np.sum(np.abs(x_diff_scaled), axis=1) / np.sum(x_true_scaled, axis=1)
+    output['percent flow allocated incorrectly'] = per_flow
+    logging.debug('percent flow allocated incorrectly: %f' % per_flow[-1])
+
+    # initial route flow error
+    start_dist_from_true = np.max(scaling * np.abs(x_true-x0))
+    logging.debug('max|f * (x_init-x_true)|: %.5f' % start_dist_from_true)
+    output['max|f * (x_init-x_true)|'] = start_dist_from_true
+
     return x_last, error, output
 
 def LS_plot(x_last, times, error):
