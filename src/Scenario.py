@@ -252,7 +252,6 @@ def experiment_CS(test=None, full=False, data=None):
     print '0.5norm(Ax*-b)^2: %8.5e' % opt_error
     print 'max|f * (x-x_true)|: %.5f\n\n\n' % \
           (dist_from_true)
-    ipdb.set_trace()
 
 def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
                     LP=True, eq='CP', init=True):
@@ -394,12 +393,13 @@ def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, scaling, output=Non
     # num incorrect entries
     wrong = np.bincount(np.where(x_diff > 1e-3)[0])
     output['incorrect x entries'] = wrong
-    logging.debug('incorrect x entries: %s' % wrong[-1])
+    logging.debug('incorrect x entries: %s' % wrong[-1] if wrong.size > 0 else 'NA')
 
     # % route flow error
     per_flow = np.sum(np.abs(x_diff_scaled), axis=1) / np.sum(x_true_scaled, axis=1)
     output['percent flow allocated incorrectly'] = per_flow
-    logging.debug('percent flow allocated incorrectly: %f' % per_flow[-1])
+    logging.debug('percent flow allocated incorrectly: %f' % per_flow[-1] if \
+                      per_flow.size > 0 else 'NA')
 
     # initial route flow error
     start_dist_from_true = np.max(scaling * np.abs(x_true-x0))
@@ -455,7 +455,7 @@ def scenario(params=None, log='INFO'):
     elif args.solver == 'BI':
         output = experiment_BI(args.sparse, full=args.all_links, data=data)
     elif args.solver == 'LS':
-        output = experiment_LS(args, full=args.all_links, data=data)
+        output = experiment_LS(args, full=args.all_links, init=args.init, data=data)
 
     if args.output == True:
         print output
