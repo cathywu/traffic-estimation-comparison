@@ -47,7 +47,7 @@ def test_bayesian_inference(outfile='scenarios_bayesian_inference.txt',n=16):
 
     return scenarios
 
-def test_all_links(outfile='scenarios_all_links.txt',n=100):
+def test_all_links(outfile='scenarios_all_links.txt',n=100,method='BB'):
     """
     Test performance of solvers under the condition where all links are observed
     and no other sensors (no linkpath or cellpath sensors). This tests the
@@ -67,6 +67,7 @@ def test_all_links(outfile='scenarios_all_links.txt',n=100):
         s['solver'] = solver
         s['all_links'] = True
         s['NLP'], s['NL'], s['NB'], s['NS'] = 0,0,0,0
+        s['method'] = method
         scenarios.append(s.copy())
 
     for s in scenarios:
@@ -247,7 +248,8 @@ def test_all(CS_only=False,outfile='scenarios_all.txt'):
     return scenarios
 
 def dump(scenarios, filename):
-    with open(filename,'w') as out:
+    dir = 'hadoop/input'
+    with open('%s/%s' % (dir,filename),'w') as out:
         for s in scenarios:
             out.write('%s\n' % json.dumps(s))
 
@@ -319,4 +321,6 @@ if __name__ == "__main__":
     # test_least_squares(n=1000)
     # test_all_links(n=1000)
     # test_all_sampled()
-    test_UE()
+    # test_UE()
+    test_all_links(outfile='scenarios_all_links_LBFGS.txt',method='LBFGS')
+    test_all_links(outfile='scenarios_all_links_DORE.txt',method='DORE')
