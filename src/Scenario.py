@@ -39,6 +39,8 @@ def to_np(X):
     return np.array(X).squeeze()
 
 def to_sp(X):
+    if X is None:
+        return None
     return csr_matrix((to_np(X.V),(to_np(X.I),to_np(X.J))), shape=X.size)
 
 def parser():
@@ -278,9 +280,10 @@ def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
         delta = np.random.normal(scale=b*args.noise)
         b = b + delta
 
-    logging.debug("Blocks: %s" % block_sizes.shape)
+    if block_sizes is not None:
+        logging.debug("Blocks: %s" % block_sizes.shape)
     # z0 = np.zeros(N.shape[1])
-    if (block_sizes-1).any() == False:
+    if N is None or (block_sizes-1).any() == False:
         iters, times, states = [0],[0],[x0]
         x_last, error, output = LS_postprocess(states,x0,A,b,x_true,N,
                                                block_sizes,flow,output=output,
@@ -362,9 +365,11 @@ def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, scaling, output=Non
 
     logging.debug("Shape of x0: %s" % repr(x0.shape))
     logging.debug("Shape of x_hat: %s" % repr(x_hat.shape))
-    logging.debug('A: %s, blocks: %s' % (A.shape, block_sizes.shape))
+    logging.debug('A: %s' % repr(A.shape))
+    if block_sizes is not None:
+        logging.debug('blocks: %s' % repr(block_sizes.shape))
     output['AA'] = A.shape
-    output['blocks'] = block_sizes.shape
+    output['blocks'] = block_sizes.shape if block_sizes is not None else None
 
     # Objective error, i.e. 0.5||Ax-b||_2^2
     starting_error = 0.5 * la.norm(A.dot(x0)-b)**2
