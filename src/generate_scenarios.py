@@ -50,6 +50,8 @@ def test_bayesian_inference(outfile='scenarios_bayesian_inference.txt',n=16):
 def test_all_links(outfile='scenarios_all_links.txt',n=100):
     """
     Test performance of solvers under the condition where all links are observed
+    and no other sensors (no linkpath or cellpath sensors). This tests the
+    limitations of link sensors.
 
     WARNING: results will be different every time this is run (sampling)
     :return:
@@ -64,6 +66,7 @@ def test_all_links(outfile='scenarios_all_links.txt',n=100):
     for s in samples:
         s['solver'] = solver
         s['all_links'] = True
+        s['NLP'], s['NL'], s['NB'], s['NS'] = 0,0,0,0
         scenarios.append(s.copy())
 
     for s in scenarios:
@@ -164,6 +167,55 @@ def test_basic(iterations=1,proportions=[1],solvers=['LS'],
                         scenarios.append(s.copy())
     return scenarios
 
+def test_UE_basic(models=['UE','SO'],iterations=1,proportions=[1],solvers=['LS'],
+            nrow_min=3,nrow_max=4,row_step=1,ncol_min=4,ncol_max=5,col_step=1,
+            EQ_NLP_max=122,EQ_NB_max=128,EQ_NS_max=128,EQ_NL_max=128):
+    scenarios = []
+
+    for i in xrange(iterations):
+        s = {}
+        s['trial'] = i
+        for solver in solvers:
+            s['solver'], s['sparse'] = solver, False
+            if solver == 'LS':
+                # TODO use the results of test_least_squares here
+                s['method'], s['init'] = 'BB', False
+
+            for model in models:
+                s['model'] = model
+                # print json.dumps(s, sort_keys=True, indent=4 * ' ')
+                # P matrices, scaling cellpath and linkpath sensing
+                if solver == 'BI' or i >= 1:
+                    continue
+                for prop in proportions:
+                    s = set_sensors(s, prop, EQ_NLP_max, EQ_NB_max,
+                                    EQ_NS_max, EQ_NL_max)
+                    s['sparse'] = True if model == 'SO' else False
+                    scenarios.append(s.copy())
+    return scenarios
+
+def test_UE(outfile='scenarios_UESO.txt',models=['UE','SO']):
+    scenarios = []
+    proportions = [0.1, 0.18, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9, 0.95, 1]
+    sensors = [(122,128,128,128),(122,0,0,0),(0,128,0,0),(0,0,128,0),(0,0,0,128),
+        (122,128,0,0),(122,0,128,0),(0,128,128,0),(0,0,128,128),(0,128,0,128),
+        (122,128,128,0)]
+
+    for EQ_NLP_max, EQ_NB_max, EQ_NS_max, EQ_NL_max in sensors:
+        s = test_UE_basic(models=models,proportions=proportions,
+                  EQ_NLP_max=EQ_NLP_max,EQ_NB_max=EQ_NB_max,EQ_NS_max=EQ_NS_max,
+                  EQ_NL_max=EQ_NL_max)
+        scenarios.extend(s)
+
+    for s in scenarios:
+        check_scenario(s)
+
+    if outfile is not None:
+        dump(scenarios,outfile)
+
+    return scenarios
+
+
 def test_all(CS_only=False,outfile='scenarios_all.txt'):
     """
     Mega test of most things
@@ -174,7 +226,7 @@ def test_all(CS_only=False,outfile='scenarios_all.txt'):
     :return:
     """
     iterations = 100
-    solvers = ['CS'] if CS_only else ['LS','BI']
+    solvers = ['CS'] if CS_only else ['LS']
     proportions = [0.1, 0.18, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9, 0.95, 1]
     EQ_NLP_max, EQ_NB_max, EQ_NS_max, EQ_NL_max = 122, 128, 128, 128
     nrow_min, nrow_max, ncol_min, ncol_max, row_step, col_step = 1,11,2,11,3,2
@@ -260,10 +312,11 @@ def test_test(outfile='scenarios_test.txt'):
 
 
 if __name__ == "__main__":
-    test_test()
-    test_bayesian_inference()
-    test_small()
-    test_all()
-    test_least_squares(n=1000)
-    test_all_links(n=1000)
-    test_all_sampled()
+    # test_test()
+    # test_bayesian_inference()
+    # test_small()
+    # test_all()
+    # test_least_squares(n=1000)
+    # test_all_links(n=1000)
+    # test_all_sampled()
+    test_UE()
