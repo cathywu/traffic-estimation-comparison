@@ -142,7 +142,7 @@ def generate_data_UE(data=None, export=False, SO=False, trials=10, demand=3, N=3
     # FIXME copy mat file to local directory?
     path='hadoop/los_angeles_data_2.mat'
     g, x_true, l, path_wps, wp_trajs, obs = synthetic_data(data, SO, demand, N,
-                                                           path=path)
+                                                           path=path,fast=False)
     x_true = to_np(x_true)
     obs=obs[0]
     A_full = path_solver.linkpath_incidence(g)
