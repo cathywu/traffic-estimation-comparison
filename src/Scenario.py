@@ -216,7 +216,7 @@ def experiment_CS(test=None, full=False, data=None):
     # alg = 'cvx_entropy'
 
     # Load test and export to .mat
-    A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0 = \
+    A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0, out = \
         load_data('%s/%s' % (c.DATA_DIR,test), full=full, OD=True, CP=True,
                   LP=True, eq='OD', init=True)
     fname = '%s/CS_%s' % (c.DATA_DIR,test)
@@ -262,16 +262,17 @@ def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
     :param test:
     :return:
     """
-    output = {}
     ## LS experiment
     ## TODO: invoke solver
     if data is None and test is not None:
         fname = '%s/%s' % (c.DATA_DIR,test)
-        A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0 = \
+        A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0, out = \
             load_data(fname, full=full, OD=OD, CP=CP, LP=LP, eq=eq, init=init)
     else:
-        A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0 = \
+        A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0, out = \
             solver_input(data, full=full, OD=OD, CP=CP, LP=LP, eq=eq, init=init)
+
+    output = out
 
     # x0 = np.array(util.block_e(block_sizes - 1, block_sizes))
 

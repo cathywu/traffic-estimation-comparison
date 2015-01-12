@@ -1,6 +1,8 @@
 ACCEPTED_LOG_LEVELS = ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG', 'WARN']
 
 DATA_DIR = '/Users/cathywu/Dropbox/PhD/traffic-estimation-comparison/data'
+SCENARIO_DIR = '/Users/cathywu/Dropbox/PhD/traffic-estimation-comparison/hadoop/input'
+RESULT_DIR = '/Users/cathywu/Dropbox/PhD/traffic-estimation-comparison/output'
 
 # Replace with repository homes
 REPOSITORIES = { \
