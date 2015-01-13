@@ -10,6 +10,34 @@ def set_sensors(s, prop, NLP_max, NB_max, NS_max, NL_max):
     s['NL'] = np.ceil(NL_max * prop)
     return s
 
+def test_all_reduced_sensors(outfile='scenarios_all_reduced_sensors.txt'):
+    scenarios_temp = []
+    scenarios_temp.extend(random.sample(test_all(outfile=None),500))
+    scenarios_temp.extend(test_all_links(outfile=None, n=500))
+    scenarios_temp.extend(test_least_squares(outfile=None,n=500))
+
+    scenarios = []
+    for scenario in scenarios_temp:
+        s = scenario.copy()
+        s['NLP'] /= 2
+        scenarios.append(s.copy())
+        s['NLP'] /= 4
+        scenarios.append(s.copy())
+        s['NB'] /= 4
+        s['NL'] /= 4
+        scenarios.append(s.copy())
+        s['NB'] /= 8
+        s['NL'] /= 8
+        scenarios.append(s.copy())
+
+    for s in scenarios:
+        check_scenario(s)
+
+    if outfile is not None:
+        dump(scenarios,outfile)
+
+    return scenarios
+
 def test_all_sampled(outfile='scenarios_all_sampled.txt'):
     scenarios = []
     scenarios.extend(random.sample(test_all(outfile=None),10))
@@ -47,7 +75,7 @@ def test_bayesian_inference(outfile='scenarios_bayesian_inference.txt',n=16):
 
     return scenarios
 
-def test_all_links(outfile='scenarios_all_links.txt',n=100,method='BB'):
+def test_all_links_UE(outfile='scenarios_all_links_UE.txt',n=220,method='BB',v=None):
     """
     Test performance of solvers under the condition where all links are observed
     and no other sensors (no linkpath or cellpath sensors). This tests the
@@ -56,6 +84,43 @@ def test_all_links(outfile='scenarios_all_links.txt',n=100,method='BB'):
     WARNING: results will be different every time this is run (sampling)
     :return:
     """
+    if v is not None:
+        outfile = "%s.%s" % (outfile,v)
+
+    scenarios = []
+
+    solver = 'LS' # override solver
+
+    scenarios_all = test_UE(outfile=None)
+    samples = random.sample(scenarios_all, n) # sample pool of all scenarios
+
+    for s in samples:
+        s['solver'] = solver
+        s['all_links'] = True
+        s['NLP'], s['NL'], s['NB'], s['NS'] = 0,0,0,0
+        s['method'] = method
+        scenarios.append(s.copy())
+
+    for s in scenarios:
+        check_scenario(s)
+
+    if outfile is not None:
+        dump(scenarios,outfile)
+
+    return scenarios
+
+def test_all_links(outfile='scenarios_all_links.txt',n=500,method='BB',v=None):
+    """
+    Test performance of solvers under the condition where all links are observed
+    and no other sensors (no linkpath or cellpath sensors). This tests the
+    limitations of link sensors.
+
+    WARNING: results will be different every time this is run (sampling)
+    :return:
+    """
+    if v is not None:
+        outfile = "%s.%s" % (outfile,v)
+
     scenarios = []
 
     solver = 'LS' # override solver
@@ -117,17 +182,18 @@ def test_noise():
 
 def test_basic(iterations=1,proportions=[1],solvers=['LS'],
                nrow_min=3,nrow_max=4,row_step=1,ncol_min=4,ncol_max=5,col_step=1,
-               EQ_NLP_max=122,EQ_NB_max=128,EQ_NS_max=128,EQ_NL_max=128):
+               EQ_NLP_max=122,EQ_NB_max=128,EQ_NS_max=128,EQ_NL_max=128,
+               init=False,sparse=False):
     scenarios = []
 
     for i in xrange(iterations):
         s = {}
         s['trial'] = i
         for solver in solvers:
-            s['solver'], s['sparse'] = solver, False
+            s['solver'], s['sparse'] = solver, sparse
             if solver == 'LS':
                 # TODO use the results of test_least_squares here
-                s['method'], s['init'] = 'BB', False
+                s['method'], s['init'] = 'BB', init
 
             models = ['UE','SO','P']
 
@@ -217,7 +283,7 @@ def test_UE(outfile='scenarios_UESO.txt',models=['UE','SO']):
     return scenarios
 
 
-def test_all(CS_only=False,outfile='scenarios_all.txt'):
+def test_all(CS_only=False,outfile='scenarios_all.txt',init=False,sparse=False):
     """
     Mega test of most things
 
@@ -237,11 +303,16 @@ def test_all(CS_only=False,outfile='scenarios_all.txt'):
                            row_step=row_step,ncol_min=ncol_min,
                            ncol_max=ncol_max,col_step=col_step,
                            EQ_NLP_max=EQ_NLP_max,EQ_NB_max=EQ_NB_max,
-                           EQ_NS_max=EQ_NB_max,EQ_NL_max=EQ_NL_max)
+                           EQ_NS_max=EQ_NB_max,EQ_NL_max=EQ_NL_max,
+                           init=init,sparse=sparse)
 
     for s in scenarios:
         check_scenario(s)
 
+    if init:
+        outfile = '%s.init' % outfile
+    if sparse:
+        outfile = '%s.sparse' % outfile
     if outfile is not None:
         dump(scenarios,outfile)
 
@@ -322,5 +393,10 @@ if __name__ == "__main__":
     # test_all_links(n=1000)
     # test_all_sampled()
     # test_UE()
-    test_all_links(outfile='scenarios_all_links_LBFGS.txt',method='LBFGS')
-    test_all_links(outfile='scenarios_all_links_DORE.txt',method='DORE')
+    # test_all_links(outfile='scenarios_all_links_LBFGS.txt',method='LBFGS')
+    # test_all_links(outfile='scenarios_all_links_DORE.txt',method='DORE')
+    # test_all(init=True)
+    # test_all(init=True,sparse=True)
+    # test_all(sparse=True)
+    # test_all_reduced_sensors()
+    test_all_links_UE(v=2)
