@@ -1,4 +1,5 @@
 import ipdb
+import time
 
 import argparse
 import logging
@@ -65,6 +66,10 @@ def parser():
     parser.add_argument('--init',dest='init',action='store_true',
                     default=False,help='LS only: initial solution from data')
 
+    # LSQR solver only
+    parser.add_argument('--damp',dest='damp',type=float,default=0.0,
+                        help='LSQR only: damping factor')
+
     # Sparsity
     parser.add_argument('--sparse',dest='sparse',action='store_true',
         default=False,help='BI/P only: Sparse toggle for route flow sampling')
@@ -117,6 +122,9 @@ def update_args(args, params):
         # For --solver LS only:
         args.method = params['method'] # BB/LBFGS/DORE
         args.init = bool(params['init']) # True/False
+
+    if args.solver == 'LSQR':
+        args.damp = float(params['damp'])
 
     return args
 
@@ -255,6 +263,21 @@ def experiment_CS(test=None, full=False, data=None):
     print 'max|f * (x-x_true)|: %.5f\n\n\n' % \
           (dist_from_true)
 
+def experiment_LSQR(args, test=None, data=None, full=False, OD=True, CP=True,
+                    LP=True, init=True, links=True, damp=0.0):
+    init_time = time.time()
+    A, b, x0, x_true, out = solver_input(data, full=full, OD=OD, CP=CP, LP=LP,
+                                        links=links,solve=True,damp=damp)
+    init_time = time.time() - init_time
+    output = out
+    output['init_time'] = init_time
+
+    x_last, error, output = LS_postprocess([x0],x0,A,b,x_true,
+                                           output=output,is_x=True)
+
+    output['duration'], output['iters'], output['times'] = 0, [0], [0]
+    return output
+
 def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
                     LP=True, eq='CP', init=True):
     """
@@ -264,6 +287,7 @@ def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
     """
     ## LS experiment
     ## TODO: invoke solver
+    init_time = time.time()
     if data is None and test is not None:
         fname = '%s/%s' % (c.DATA_DIR,test)
         A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0, out = \
@@ -271,8 +295,9 @@ def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
     else:
         A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0, out = \
             solver_input(data, full=full, OD=OD, CP=CP, LP=LP, eq=eq, init=init)
-
+    init_time = time.time() - init_time
     output = out
+    output['init_time'] = init_time
 
     # x0 = np.array(util.block_e(block_sizes - 1, block_sizes))
 
@@ -286,13 +311,14 @@ def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
     # z0 = np.zeros(N.shape[1])
     if N is None or (block_sizes-1).any() == False:
         iters, times, states = [0],[0],[x0]
-        x_last, error, output = LS_postprocess(states,x0,A,b,x_true,N,
-                                               block_sizes,flow,output=output,
-                                               is_x=True)
+        x_last, error, output = LS_postprocess(states,x0,A,b,x_true,scaling=flow,
+                                               block_sizes=block_sizes,N=N,
+                                               output=output,is_x=True)
     else:
         iters, times, states = LS_solve(A,b,x0,N,block_sizes,args)
-        x_last, error, output = LS_postprocess(states,x0,A,b,x_true,N,
-                                               block_sizes,flow,output=output)
+        x_last, error, output = LS_postprocess(states,x0,A,b,x_true,scaling=flow,
+                                               block_sizes=block_sizes,N=N,
+                                               output=output)
 
     # LS_plot(x_last, times, error)
     output['duration'] = np.sum(times)
@@ -352,8 +378,10 @@ def LS_solve(A,b,x0,N,block_sizes,args):
     logging.debug('Stopping %s solver...' % args.method)
     return iters, times, states
 
-def LS_postprocess(states, x0, A, b, x_true, N, block_sizes, scaling, output=None,
-                   is_x=False):
+def LS_postprocess(states, x0, A, b, x_true, scaling=None, block_sizes=None,
+                   output=None, N=None, is_x=False):
+    if scaling is None:
+        scaling = np.ones(x_true.shape)
     if output is None:
         output = {}
     d = len(states)
@@ -462,6 +490,8 @@ def scenario(params=None, log='INFO'):
         output = experiment_BI(args.sparse, full=args.all_links, data=data)
     elif args.solver == 'LS':
         output = experiment_LS(args, full=args.all_links, init=args.init, data=data)
+    elif args.solver == 'LSQR':
+        output = experiment_LSQR(args, full=args.all_links, data=data)
 
     if args.output == True:
         print output

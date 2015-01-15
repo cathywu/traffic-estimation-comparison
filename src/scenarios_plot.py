@@ -86,28 +86,47 @@ def filter(s,group_by=[],match_by=[],geq=[],leq=[]):
 
 def get_key(d,key):
     if key == 'nroutes':
-        return d['AA'][0]
-    elif key == 'nsensors':
         return d['AA'][1]
-    elif key == 'percent flow allocated incorrectly':
-        return get_per_flow(d)
+    elif key == 'nobj':
+        return d['AA'][0]
+    elif key in ['perflow','percent flow allocated incorrectly']:
+        return _get_per_flow(d)
     elif key == 'blocks':
-        return get_blocks(d)
+        return _get_blocks(d)
+    elif key == 'NCP':
+        return d['params']['NB'] + d['params']['NS'] + d['params']['NL']
     elif key == 'NLPCP':
-        return d['params']['NLP'] + d['params']['NB'] + d['params']['NS'] + d['params']['NL']
+        return d['params']['NLP'] + get_key(d,'NCP')
+    elif key == 'nLPCP':
+        return d['nLP'] + d['nCP']
+    elif key in ['nLinks','nOD','nCP','nLP','duration']:
+        return d[key]
     else:
         return d['params'][key]
 
-def get_blocks(d):
+def _get_blocks(d):
     if d['blocks'] is None:
         return 0
     return d['blocks'][0]
 
-def get_per_flow(d):
+def _get_per_flow(d):
     if type(d['percent flow allocated incorrectly']) == type([]):
         return d['percent flow allocated incorrectly'][-1]
     else:
         return d['percent flow allocated incorrectly']
+
+def get_stats(xs,f,stat='mean'):
+    return np.array([_get_stat(x,f,stat=stat) for x in xs])
+
+def _get_stat(l, f, stat='first'):
+    if stat=='first':
+        return f(l[0])
+    elif stat=='mean':
+        return np.mean([f(x) for x in l])
+    elif stat=='median':
+        return np.median([f(x) for x in l])
+    else:
+        print "Error: stat %s not found" % stat
 
 def plot_ls(s):
     """
@@ -142,18 +161,8 @@ def plot_ls(s):
     """
     pass
 
-def get_stat(l, f, stat='first'):
-    if stat=='first':
-        return f(l[0])
-    elif stat=='mean':
-        return np.mean([f(x) for x in l])
-    elif stat=='median':
-        return np.median([f(x) for x in l])
-    else:
-        print "Error: stat %s not found" % stat
-
 def plot_sensors_vs_constraints_ls_new(s, init=False,sparse=True, stat='mean',
-                                     caption=None):
+                                     caption=None,error_leq=0.01):
     """
     Plot the types and number of sensors needed to achieve 95%+ accuracy
     NEW, i.e. experiments have recorded sizes for b,d,f,g
@@ -164,26 +173,21 @@ def plot_sensors_vs_constraints_ls_new(s, init=False,sparse=True, stat='mean',
     :return:
     """
     def plot1(d, title, stat='mean'):
-        nroutes = np.array([get_stat(x,lambda x: x['AA'][1],stat=stat) \
-                            for x in d.itervalues()])
-        blocks = np.array([get_stat(x,lambda x: get_blocks(x),stat=stat) \
-                           for x in d.itervalues()])
-        NLP = np.array([get_stat(x,lambda x: x['params']['NLP'],stat=stat) \
-                        for x in d.itervalues()])
-        NCP = np.array([get_stat(x,lambda x: x['params']['NB']+x['params']['NL'],
-                                 stat=stat) for x in d.itervalues()])
-        nLPconstraints = np.array([get_stat(x,lambda x: x['nLP'],stat=stat) \
-                                     for x in d.itervalues()])
-        nCPconstraints = np.array([get_stat(x,lambda x: x['nCP'],stat=stat) \
-                                   for x in d.itervalues()])
-        nLconstraints = np.array([get_stat(x,lambda x: x['nLinks'],stat=stat) \
-                                    for x in d.itervalues()])
-        nODconstraints = np.array([get_stat(x,lambda x: x['nOD'],stat=stat) \
-                                   for x in d.itervalues()])
-        note = [{ 'x' : x[0]['AA'][1], 'y' : get_blocks(x[0]),
-                  'duration' : "{:.5f}".format(x[0]['duration']),
-                  'perflow wrong' : "{:.5f}".format(get_per_flow(x[0])),
-                  } for x in d.itervalues()]
+        nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
+        blocks = get_stats(d.itervalues(), lambda x: get_key(x,'blocks'), stat=stat)
+        NLP = get_stats(d.itervalues(), lambda x: get_key(x,'NLP'), stat=stat)
+        NCP = get_stats(d.itervalues(), lambda x: get_key(x,'NCP'), stat=stat)
+        nLPconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nLP'), stat=stat)
+        nCPconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nCP'), stat=stat)
+
+        duration = get_stats(d.itervalues(), lambda x: get_key(x,'duration'), stat=stat)
+        perflow_wrong = get_stats(d.itervalues(), lambda x: get_key(x,'perflow'), stat=stat)
+
+        note = [{'nLP constraints' : a, 'nCP constraints': b, 'NLP': c, 'NCP':e,
+                 'blocks' : f, 'duration' : "{:.5f}".format(g),
+                 'perflow wrong' : "{:.5f}".format(h),
+                 } for (a,b,c,e,f,g,h) in zip(nLPconstraints,nCPconstraints,
+                                NLP,NCP,blocks,duration,perflow_wrong)]
         info = [x[0] for x in d.itervalues()]
 
         colors = nroutes
@@ -217,7 +221,7 @@ def plot_sensors_vs_constraints_ls_new(s, init=False,sparse=True, stat='mean',
     title1 = 'NLP+NCP sensors vs constraints'
     d = filter(s,group_by=['nroutes','NLP'],
                match_by=[('solver','LS'),('sparse',sparse),('init',init)],
-               leq=[('percent flow allocated incorrectly',0.01),('NLPCP',350)])
+               leq=[('percent flow allocated incorrectly',error_leq),('NLPCP',350)])
     if len(d.keys()) > 0:
         fig = plt.figure()
         fig.suptitle("%s %s" % (suptitle % (sparse,init,stat),caption), fontsize=8)
@@ -226,7 +230,7 @@ def plot_sensors_vs_constraints_ls_new(s, init=False,sparse=True, stat='mean',
     show()
 
 def plot_nroutes_vs_sensors_ls_P_new(s, init=False,sparse=True, stat='mean',
-                                 caption=None):
+                                 caption=None,error_leq=0.01):
     """
     Plot the types and number of sensors needed to achieve 95%+ accuracy
     NEW, i.e. experiments have recorded sizes for b,d,f,g
@@ -237,24 +241,16 @@ def plot_nroutes_vs_sensors_ls_P_new(s, init=False,sparse=True, stat='mean',
     :return:
     """
     def plot2(d, title, stat='mean'):
-        nroutes = np.array([get_stat(x,lambda x: x['AA'][1],stat=stat) \
-                            for x in d.itervalues()])
-        blocks = np.array([get_stat(x,lambda x: get_blocks(x),stat=stat) \
-                           for x in d.itervalues()])
-        NLP = np.array([get_stat(x,lambda x: x['params']['NLP'],stat=stat) \
-                        for x in d.itervalues()])
-        NCP = np.array([get_stat(x,lambda x: x['params']['NB']+x['params']['NL'],
-                                 stat=stat) for x in d.itervalues()])
-        nLPCPconstraints = np.array([get_stat(x,lambda x: x['nLP'] + x['nCP'],stat=stat) \
-                                     for x in d.itervalues()])
-        nLconstraints = np.array([get_stat(x,lambda x: x['nLinks'],stat=stat) \
-                                  for x in d.itervalues()])
-        nODconstraints = np.array([get_stat(x,lambda x: x['nOD'],stat=stat) \
-                                   for x in d.itervalues()])
-        note = [{ 'x' : x[0]['AA'][1], 'y' : get_blocks(x[0]),
-                  'duration' : "{:.5f}".format(x[0]['duration']),
-                  'perflow wrong' : "{:.5f}".format(get_per_flow(x[0])),
-                  } for x in d.itervalues()]
+
+        nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
+        blocks = get_stats(d.itervalues(), lambda x: get_key(x,'blocks'), stat=stat)
+        nLconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nLinks'), stat=stat)
+        nODconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nOD'), stat=stat)
+        perflow_wrong = get_stats(d.itervalues(), lambda x: get_key(x,'perflow'), stat=stat)
+        note = [{'nL constraints': y, 'nOD constraints': q, 'blocks' : b,
+                 'perflow wrong' : "{:.5f}".format(p),
+                 } for (y,b,q,p) in zip(nLconstraints,blocks,nODconstraints,
+                                        perflow_wrong)]
         info = [x[0] for x in d.itervalues()]
 
         size = blocks / nroutes
@@ -275,27 +271,19 @@ def plot_nroutes_vs_sensors_ls_P_new(s, init=False,sparse=True, stat='mean',
 
     def plot(d, title, stat='mean'):
         # Plot information
-        NLP = np.array([get_stat(x,lambda x: x['params']['NLP'],stat=stat) \
-                        for x in d.itervalues()])
-        NCP = np.array([get_stat(x,lambda x: x['params']['NB']+x['params']['NL'],
-                                 stat=stat) for x in d.itervalues()])
-        nLPCPconstraints = np.array([get_stat(x,lambda x: x['nLP'] + x['nCP'],stat=stat) \
-                                     for x in d.itervalues()])
+        NLPCP = get_stats(d.itervalues(), lambda x: get_key(x,'NLPCP'), stat=stat)
+        nLPCPconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nLPCP'), stat=stat)
 
         # Display information
-        nroutes = np.array([get_stat(x,lambda x: x['AA'][1],stat=stat) \
-                            for x in d.itervalues()])
-        duration = np.array([get_stat(x,lambda x: x['duration'],stat=stat) \
-                             for x in d.itervalues()])
-        perflow_wrong = np.array([get_stat(x,lambda x: get_per_flow(x),stat=stat) \
-                                  for x in d.itervalues()])
-        blocks = np.array([get_stat(x,lambda x: get_blocks(x),stat=stat) \
-                           for x in d.itervalues()])
+        nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
+        duration = get_stats(d.itervalues(), lambda x: get_key(x,'duration'), stat=stat)
+        perflow_wrong = get_stats(d.itervalues(), lambda x: get_key(x,'perflow'), stat=stat)
+        blocks = get_stats(d.itervalues(), lambda x: get_key(x,'blocks'), stat=stat)
         note = [{'nLPCP constraints': y, 'blocks' : b,
-                  'duration' : "{:.5f}".format(d),
+                  'duration' : "{:.5f}".format(q),
                   'perflow wrong' : "{:.5f}".format(p),
-                  } for (x,y,b,d,p) in zip(d.itervalues(),nLPCPconstraints,
-                                           blocks,duration,perflow_wrong)]
+                  } for (y,b,q,p) in zip(nLPCPconstraints,blocks,duration,
+                                         perflow_wrong)]
         info = [x[0] for x in d.itervalues()]
 
         # Color and size information
@@ -303,7 +291,7 @@ def plot_nroutes_vs_sensors_ls_P_new(s, init=False,sparse=True, stat='mean',
         size = blocks / nroutes
         labels = [json.dumps(x,sort_keys=True, indent=4) for x in note]
 
-        plot_scatter(nroutes,NLP+NCP,c=colors,s=size,label=labels,info=info,
+        plot_scatter(nroutes,NLPCP,c=colors,s=size,label=labels,info=info,
                      alpha=0.2)
 
         cb = plt.colorbar()
@@ -322,7 +310,7 @@ def plot_nroutes_vs_sensors_ls_P_new(s, init=False,sparse=True, stat='mean',
     title1 = 'nroutes vs sensors'
     d = filter(s,group_by=['nroutes','NLP'],
                match_by=[('solver','LS'),('sparse',sparse),('init',init)],
-               leq=[('percent flow allocated incorrectly',0.01)])
+               leq=[('percent flow allocated incorrectly',error_leq)])
     if len(d.keys()) > 0:
         fig = plt.figure()
         fig.suptitle("%s %s" % (suptitle % (sparse,init,stat),caption), fontsize=8)
@@ -334,7 +322,7 @@ def plot_nroutes_vs_sensors_ls_P_new(s, init=False,sparse=True, stat='mean',
     show()
 
 def plot_nroutes_vs_sensors_ls_P(s, init=False,sparse=True, stat='mean',
-                                 caption=None):
+                                 caption=None,error_leq=0.01):
     """
     Plot the types and number of sensors needed to achieve 95%+ accuracy
     :param s:
@@ -344,18 +332,13 @@ def plot_nroutes_vs_sensors_ls_P(s, init=False,sparse=True, stat='mean',
     :return:
     """
     def plot(d, title, stat='mean'):
-        nroutes = np.array([get_stat(x,lambda x: x['AA'][1],stat=stat) \
-                            for x in d.itervalues()])
-        blocks = np.array([get_stat(x,lambda x: get_blocks(x),stat=stat) \
-                           for x in d.itervalues()])
-        NLP = np.array([get_stat(x,lambda x: x['params']['NLP'],stat=stat) \
-                        for x in d.itervalues()])
-        NCP = np.array([get_stat(x,lambda x: x['params']['NB']+x['params']['NL'],
-                                 stat=stat) for x in d.itervalues()])
-        note = [{ 'x' : x[0]['AA'][1], 'y' : get_blocks(x[0]),
-                  'duration' : "{:.5f}".format(x[0]['duration']),
-                  'perflow wrong' : "{:.5f}".format(get_per_flow(x[0])),
-                  } for x in d.itervalues()]
+        nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
+        blocks = get_stats(d.itervalues(), lambda x: get_key(x,'blocks'), stat=stat)
+        NLP = get_stats(d.itervalues(), lambda x: get_key(x,'NLP'), stat=stat)
+        NCP = get_stats(d.itervalues(), lambda x: get_key(x,'NCP'), stat=stat)
+        perflow_wrong = get_stats(d.itervalues(), lambda x: get_key(x,'perflow'), stat=stat)
+        note = [{ 'nroutes' : a, 'blocks' : b, 'NLP': c, 'NCP': e, 'perflow': f,
+                  } for (a,b,c,e,f) in zip(nroutes,blocks,NLP,NCP,perflow_wrong)]
         info = [x[0] for x in d.itervalues()]
 
         colors = NCP
@@ -380,7 +363,7 @@ def plot_nroutes_vs_sensors_ls_P(s, init=False,sparse=True, stat='mean',
     title1 = 'nroutes vs NLP'
     d = filter(s,group_by=['nroutes','NLP'],
                match_by=[('solver','LS'),('sparse',sparse),('init',init)],
-               leq=[('percent flow allocated incorrectly',0.01)])
+               leq=[('percent flow allocated incorrectly',error_leq)])
     if len(d.keys()) > 0:
         fig = plt.figure()
         fig.suptitle("%s %s" % (suptitle % (sparse,init,stat),caption), fontsize=8)
@@ -392,18 +375,19 @@ def plot_nroutes_vs_nblocks_init_ls(s, sparse=True, stat='mean', error_leq=1,
                                     caption=None):
     def plot(d, title, stat='mean', marker=None, init=None, colorbar=True,
              error_leq=1):
-        nroutes = np.array([get_stat(x,lambda y: y['AA'][1],stat=stat) for x in d.itervalues()])
-        blocks = np.array([get_stat(x,lambda y: get_blocks(y),stat=stat) for x in d.itervalues()])
-        note = [{ 'x' : x[0]['AA'][1], 'y' : get_blocks(x[0]),
-                  'duration' : "{:.5f}".format(x[0]['duration']),
-                  'perflow wrong' : "{:.5f}".format(get_per_flow(x[0])),
-                  } for x in d.itervalues()]
+        nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
+        blocks = get_stats(d.itervalues(), lambda x: get_key(x,'blocks'), stat=stat)
+        perflow_wrong = get_stats(d.itervalues(), lambda x: get_key(x,'perflow'), stat=stat)
+        duration = get_stats(d.itervalues(), lambda x: get_key(x,'duration'), stat=stat)
+
+        note = [{ 'nroutes' : a, 'blocks' : b, 'perflow': c,
+                  } for (a,b,c) in zip(nroutes,blocks,perflow_wrong)]
         info = [x[0] for x in d.itervalues()]
 
-        size = np.array([40*x[0]['duration']+1 for x in d.itervalues()])
-        max_size = np.max(size)
-        size = 40/max_size * size
-        colors = [np.min([1,get_per_flow(x[0])]) for x in d.itervalues()]
+        duration_capped = np.minimum(duration,600*np.ones(duration.size))
+        max_size = np.max(duration_capped)
+        size = 40/max_size * duration_capped
+        colors = np.minimum(perflow_wrong,np.ones(perflow_wrong.size))
         labels = [json.dumps(x, sort_keys=True, indent=4) for x in note]
 
         plot_scatter(nroutes,blocks/nroutes,c=colors,s=size,label=labels,
@@ -452,26 +436,26 @@ def plot_nroutes_vs_nblocks_init_ls(s, sparse=True, stat='mean', error_leq=1,
 def plot_nroutes_vs_nblocks_ls(s, init=False,sparse=True, stat='mean',
                                yaxis='blocks', caption=None):
     def plot_ratio(d, title, stat='mean',yaxis='blocks'):
-        nroutes = np.array([get_stat(x,lambda y: y['AA'][1],stat=stat) for x \
-                            in d.itervalues()])
+        nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
         if yaxis=='blocks+obj':
-            blocks = np.array([get_stat(x,lambda y: get_blocks(y) + y['AA'][0],
-                                        stat=stat) for x in d.itervalues()])
+            blocks = get_stats(d.itervalues(), lambda x: get_key(x,'blocks') + get_key(x,'nobj'), stat=stat)
         else:
-            blocks = np.array([get_stat(x,lambda y: get_blocks(y),stat=stat) \
-                               for x in d.itervalues()])
-        note = [{ 'x' : y, 'y' : z,
-                  'duration' : "{:.5f}".format(x[0]['duration']),
-                  'perflow wrong' : "{:.5f}".format(get_per_flow(x[0])),
-                  } for (y,z,x) in zip(nroutes,blocks,d.itervalues())]
+            blocks = get_stats(d.itervalues(), lambda x: get_key(x,'blocks'), stat=stat)
+        perflow_wrong = get_stats(d.itervalues(), lambda x: get_key(x,'perflow'), stat=stat)
+        duration = get_stats(d.itervalues(), lambda x: get_key(x,'duration'), stat=stat)
+
+        note = [{ 'nroutes' : a, yaxis : b, 'perflow': c,
+                  } for (a,b,c) in zip(nroutes,blocks,perflow_wrong)]
         info = [x[0] for x in d.itervalues()]
 
-        colors = [np.min([1,get_per_flow(x[0])]) for x in d.itervalues()]
-        size = [40*x[0]['duration']+1 for x in d.itervalues()]
+        duration_capped = np.minimum(duration,600*np.ones(duration.size))
+        max_size = np.max(duration_capped)
+        size = 40/max_size * duration_capped
+        colors = np.minimum(perflow_wrong,np.ones(perflow_wrong.size))
         labels = [json.dumps(x,sort_keys=True, indent=4) for x in note]
 
         plot_scatter(nroutes,blocks/nroutes,c=colors,s=size,label=labels,
-                     info=info,alpha=0.008)
+                     info=info,alpha=0.2)
 
         cb = plt.colorbar()
         cb.set_alpha(1)
@@ -485,26 +469,26 @@ def plot_nroutes_vs_nblocks_ls(s, init=False,sparse=True, stat='mean',
         plt.xlim(np.max([0,plt.xlim()[0]]),plt.xlim()[1])
 
     def plot(d, title, stat='mean',yaxis='blocks'):
-        nroutes = np.array([get_stat(x,lambda x: x['AA'][1],stat=stat) for x \
-                            in d.itervalues()])
+        nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
         if yaxis=='blocks+obj':
-            blocks = np.array([get_stat(x,lambda y: get_blocks(y) + y['AA'][0],
-                                        stat=stat) for x in d.itervalues()])
+            blocks = get_stats(d.itervalues(), lambda x: get_key(x,'blocks') + get_key(x,'nobj'), stat=stat)
         else:
-            blocks = np.array([get_stat(x,lambda y: get_blocks(y),stat=stat) \
-                               for x in d.itervalues()])
-        note = [{ 'x' : y, 'y' : z,
-                  'duration' : "{:.5f}".format(x[0]['duration']),
-                  'perflow wrong' : "{:.5f}".format(get_per_flow(x[0])),
-                  } for (y,z,x) in zip(nroutes,blocks,d.itervalues())]
+            blocks = get_stats(d.itervalues(), lambda x: get_key(x,'blocks'), stat=stat)
+        perflow_wrong = get_stats(d.itervalues(), lambda x: get_key(x,'perflow'), stat=stat)
+        duration = get_stats(d.itervalues(), lambda x: get_key(x,'duration'), stat=stat)
+
+        note = [{ 'nroutes' : a, yaxis : b, 'perflow': c,
+                  } for (a,b,c) in zip(nroutes,blocks,perflow_wrong)]
         info = [x[0] for x in d.itervalues()]
 
-        colors = [np.min([1,get_per_flow(x[0])]) for x in d.itervalues()]
-        size = [40*x[0]['duration']+1 for x in d.itervalues()]
+        duration_capped = np.minimum(duration,600*np.ones(duration.size))
+        max_size = np.max(duration_capped)
+        size = 40/max_size * duration_capped
+        colors = np.minimum(perflow_wrong,np.ones(perflow_wrong.size))
         labels = [json.dumps(x,sort_keys=True, indent=4) for x in note]
 
         plot_scatter(nroutes,blocks,c=colors,s=size,label=labels,info=info,
-                    alpha=0.008)
+                    alpha=0.2)
 
         cb = plt.colorbar()
         cb.set_alpha(1)
@@ -588,6 +572,7 @@ if __name__ == "__main__":
     # Plot configuration
     sparse = False
     yaxis = 'blocks'
+    error = 0.10
 
     # caption = """This plot compares accuracy (%% error), duration, and the number of blocks, as the number of routes considered grows (which is
     # a function of the network and nroutes parameter. To the left, we have on the yaxis the number of %s; the right plot shows the same information but displays a
@@ -605,27 +590,27 @@ if __name__ == "__main__":
     # the UE/SO experiments."""
     # plot_nroutes_vs_nblocks_ls(scenarios_all_links, init=False, sparse=sparse,
     #                            yaxis=yaxis, caption=caption)
-    # caption = """This plot first filters LS/P experiments that get 99%%+ route flow accuracy, then looks at the number of selected sensors (LP on the yaxis,
+    # caption = """This plot first filters LS/P experiments that get %0.2f+ route flow accuracy, then looks at the number of selected sensors (LP on the yaxis,
     # CP encoded in color). Unfortunately, this doesn't give a sense of how much information is from OD pairs, links, and also how much information is
-    # provided by the LP/CP sensors in aggregate"""
+    # provided by the LP/CP sensors in aggregate""" % error
     # plot_nroutes_vs_sensors_ls_P(scenarios_ls_P, init=False, sparse=sparse,
-    #                              caption=caption)
-    caption = """This plot is the same as the previous but better (but with less data for now) because we have also recorded the number of constraints that
-    come from the various sensors. CAUTION: it is the number of resulting constraints, NOT the number of sensors of each type, that is displayed."""
-    plot_nroutes_vs_sensors_ls_P_new(scenarios_new, init=False, sparse=sparse,
-                                 caption=caption)
-    # # FIXME I'm running more experiments in the empty space, check back in a bit
-    # caption = """For LS experiments that perform well, this plot shows the makeup of LP/CP sensors"""
-    # plot_sensors_vs_constraints_ls_new(scenarios_new, init=False, sparse=sparse,
-    #                                  caption=caption)
-    # ############
-    # caption = """Now we start to look at if initializing the LS solver with a guess based off of the equality constraint yields any performance improvement.
-    # The answer looks like yes with regards to accuracy but no with regards to runtime. I think this is bad news."""
-    # plot_nroutes_vs_nblocks_init_ls(scenarios_ls, sparse=sparse,
-    #                                 caption=caption)
-    # ############
-    # caption = """This is basically the same plot, but we filter for experiments that are 99%%+ accurate in route flow"""
-    # plot_nroutes_vs_nblocks_init_ls(scenarios_ls, sparse=sparse, error_leq=0.01,
-    #                                 caption=caption)
+    #                              caption=caption,error_leq=error)
+    # caption = """This plot is the same as the previous but better (but with less data for now) because we have also recorded the number of constraints that
+    # come from the various sensors. CAUTION: it is the number of resulting constraints, NOT the number of sensors of each type, that is displayed."""
+    # plot_nroutes_vs_sensors_ls_P_new(scenarios_new, init=False, sparse=sparse,
+    #                              caption=caption,error_leq=error)
+    # FIXME I'm running more experiments in the empty space, check back in a bit
+    caption = """For LS experiments that perform well, this plot shows the makeup of LP/CP sensors"""
+    plot_sensors_vs_constraints_ls_new(scenarios_new, init=False, sparse=sparse,
+                                     caption=caption,error_leq=error)
+    ############
+    caption = """Now we start to look at if initializing the LS solver with a guess based off of the equality constraint yields any performance improvement.
+    The answer looks like yes with regards to accuracy but no with regards to runtime. I think this is bad news."""
+    plot_nroutes_vs_nblocks_init_ls(scenarios_ls, sparse=sparse,
+                                    caption=caption)
+    ############
+    caption = """This is basically the same plot, but we filter for experiments that are %0.2f+ accurate in route flow""" % error
+    plot_nroutes_vs_nblocks_init_ls(scenarios_ls, sparse=sparse, error_leq=error,
+                                    caption=caption)
 
 

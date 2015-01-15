@@ -3,12 +3,79 @@ import json
 import numpy as np
 import random
 
+def chunk(l, n):
+    """ Yield successive n-sized chunks from l.
+    """
+    for i in xrange(0, len(l), n):
+        yield l[i:i+n]
+
 def set_sensors(s, prop, NLP_max, NB_max, NS_max, NL_max):
     s['NLP'] = np.ceil(NLP_max * prop)
     s['NB'] = np.ceil(NB_max * prop)
     s['NS'] = np.ceil(NS_max * prop)
     s['NL'] = np.ceil(NL_max * prop)
     return s
+
+def dump(scenarios, filename):
+    dir = 'hadoop/input'
+    with open('%s/%s' % (dir,filename),'w') as out:
+        for s in scenarios:
+            out.write('%s\n' % json.dumps(s))
+
+def check_scenario(s):
+    check_keys(s,['solver','model','sparse','NLP','NB','NS','NL'])
+    if s['model'] == 'P':
+        check_keys(s,['nrow','ncol','nodroutes'])
+    if s['solver'] == 'LS':
+        check_keys(s,['method','init'])
+
+def check_keys(d,keys):
+    for key in keys:
+        if key not in d:
+            return "Missing %s in %s" % (key, d)
+
+def test_all_reduced_reduced_sensors(outfile='scenarios_all_reduced_reduced_sensors.txt'):
+    scenarios_temp = []
+    scenarios_temp.extend(random.sample(test_all(outfile=None),500))
+    scenarios_temp.extend(test_least_squares(outfile=None,n=500))
+
+    scenarios = []
+    for scenario in scenarios_temp:
+        s = scenario.copy()
+        s['NLP'] /= 4
+        s['NB'] /= 10
+        s['NL'] /= 10
+        scenarios.append(s.copy())
+        s['NB'] /= 12
+        s['NL'] /= 12
+        scenarios.append(s.copy())
+        s['NB'] /= 14
+        s['NL'] /= 14
+        scenarios.append(s.copy())
+        s['NB'] /= 16
+        s['NL'] /= 16
+        scenarios.append(s.copy())
+        s['NLP'] /= 2
+        s['NB'] /= 10
+        s['NL'] /= 10
+        scenarios.append(s.copy())
+        s['NB'] /= 12
+        s['NL'] /= 12
+        scenarios.append(s.copy())
+        s['NB'] /= 14
+        s['NL'] /= 14
+        scenarios.append(s.copy())
+        s['NB'] /= 16
+        s['NL'] /= 16
+        scenarios.append(s.copy())
+
+    for s in scenarios:
+        check_scenario(s)
+
+    if outfile is not None:
+        dump(scenarios,outfile)
+
+    return scenarios
 
 def test_all_reduced_sensors(outfile='scenarios_all_reduced_sensors.txt'):
     scenarios_temp = []
@@ -180,6 +247,34 @@ def test_noise():
     fname = 'scenarios_noise.txt'
     pass
 
+def test_LSQR(outfile='scenarios_LSQR_d%0.2f.%d.txt',N=10,damp=0.0):
+    import random
+    scenarios = []
+
+    solver = 'LSQR'
+
+    sensor_configs = [(True,True,True,True), (True,True,False,False),
+        (False,False,True,True),(False,False,True,False),
+        (False,False,False,True),(True,False,False,False),
+        (False,True,False,False)]
+    scenarios_all = test_all(outfile=None)
+
+    for s in scenarios_all:
+        s['solver'] = solver
+        s['damp'] = damp
+        s.pop('method',None)
+        s.pop('init',None)
+
+        for c in sensor_configs:
+            s['use_L'], s['use_OD'],s['use_CP'],s['use_LP'] = c
+            scenarios.append(s.copy())
+
+    if outfile is not None:
+        size = len(scenarios)
+        chunks = chunk(scenarios, size/N)
+        for i,chunkk in enumerate(chunks):
+            dump(chunkk,outfile % (damp,i))
+
 def test_basic(iterations=1,proportions=[1],solvers=['LS'],
                nrow_min=3,nrow_max=4,row_step=1,ncol_min=4,ncol_max=5,col_step=1,
                EQ_NLP_max=122,EQ_NB_max=128,EQ_NS_max=128,EQ_NL_max=128,
@@ -318,24 +413,6 @@ def test_all(CS_only=False,outfile='scenarios_all.txt',init=False,sparse=False):
 
     return scenarios
 
-def dump(scenarios, filename):
-    dir = 'hadoop/input'
-    with open('%s/%s' % (dir,filename),'w') as out:
-        for s in scenarios:
-            out.write('%s\n' % json.dumps(s))
-
-def check_scenario(s):
-    check_keys(s,['solver','model','sparse','NLP','NB','NS','NL'])
-    if s['model'] == 'P':
-        check_keys(s,['nrow','ncol','nodroutes'])
-    if s['solver'] == 'LS':
-        check_keys(s,['method','init'])
-
-def check_keys(d,keys):
-    for key in keys:
-        if key not in d:
-            return "Missing %s in %s" % (key, d)
-
 def test_small(outfile='scenarios_small.txt'):
     """
     For testing that hadoop setup is working
@@ -399,4 +476,6 @@ if __name__ == "__main__":
     # test_all(init=True,sparse=True)
     # test_all(sparse=True)
     # test_all_reduced_sensors()
-    test_all_links_UE(v=2)
+    # test_all_links_UE(v=2)
+    # test_all_reduced_reduced_sensors()
+    test_LSQR()
