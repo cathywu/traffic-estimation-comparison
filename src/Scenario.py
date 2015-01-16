@@ -117,10 +117,10 @@ def update_args(args, params):
         args.all_links = bool(params['all_links'])
 
     # Sensor toggles
-    args.use_L = bool(params['use_L'])
-    args.use_OD = bool(params['use_OD'])
-    args.use_CP = bool(params['use_CP'])
-    args.use_LP = bool(params['use_LP'])
+    args.use_L = bool(params['use_L']) if 'use_L' in params else True
+    args.use_OD = bool(params['use_OD']) if 'use_OD' in params else True
+    args.use_CP = bool(params['use_CP']) if 'use_CP' in params else True
+    args.use_LP = bool(params['use_LP']) if 'use_LP' in params else True
 
     # Sensor configurations
     args.NLP = int(params['NLP']) # number of linkpath sensors (sampled randomly)
