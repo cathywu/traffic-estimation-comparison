@@ -200,16 +200,16 @@ def plot_sensors_vs_configs_v3(s, init=False,sparse=True, stat='mean',
                                               NCP,blocks,duration,perflow_wrong)]
         info = [x[0] for x in d.itervalues()]
 
-        max_size = np.max(nTotalSensors)
-        size = 40/max_size * nTotalSensors
+        # max_size = np.max(nTotalSensors)
+        size = 2 # 40/max_size * nTotalSensors
         labels = [json.dumps(x,sort_keys=True, indent=4) for x in note]
 
-        plot_scatter(nroutes,nTotalSensors,c=colors,s=size,label=labels,info=info,
+        plot_scatter(nroutes,nTotalSensors,c=color,s=size,label=labels,info=info,
                      alpha=0.2)
 
         plt.title(title)
         plt.xlabel('Number of routes')
-        plt.ylabel('Number of total sensor constraints')
+        plt.ylabel('Number of total sensors')
         plt.ylim(np.max([plt.ylim()[0]],0),plt.ylim()[1])
         plt.xlim(np.max([0,plt.xlim()[0]]),plt.xlim()[1])
 
@@ -232,15 +232,20 @@ def plot_sensors_vs_configs_v3(s, init=False,sparse=True, stat='mean',
                       (False,True,False,False)]
     sensor_param = ['use_L','use_OD','use_CP','use_LP']
     colors = ['b','g','r','c','m','y','k']
+    labels = ['All','L/OD','CP/LP','CP','LP','L','OD']
 
     fig = plt.figure()
-    for (config,color) in zip(sensor_configs,colors):
+    legend = []
+    for (config,color,label) in zip(sensor_configs,colors,labels):
         match_by_sensor = zip(sensor_param,config)
         d = filter(s,group_by=['nroutes','NLP'], match_by=match_by + match_by_sensor,leq=leq)
-        plot1(d, title1, config=config, color=color, stat=stat)
-        plt.hold(True)
+        if len(d.keys()) > 0:
+            print label, len(d.keys())
+            plot1(d, title1, config=config, color=color, stat=stat)
+            plt.hold(True)
+            legend.append(label)
 
-    plt.legend(['All','L/OD','CP/LP','CP','LP','L','OD'])
+    plt.legend(legend)
     fig.suptitle("%s %s" % (suptitle % (solver,model,sparse,init,stat),caption), fontsize=8)
 
     if disp:
@@ -742,6 +747,9 @@ if __name__ == "__main__":
     by the sensor configuration, and sized by the number of actual sensors"""
     plot_sensors_vs_configs_v3(scenarios_v3, sparse=sparse,solver='LSQR',
                                 caption=caption,error_leq=error,max_NLPCP=350)
+    caption = """Same but for LS"""
+    plot_sensors_vs_configs_v3(scenarios_v2, sparse=sparse,solver='LS',
+                               caption=caption,error_leq=error,max_NLPCP=350)
 
     # PLOT LS vs LSQ
 

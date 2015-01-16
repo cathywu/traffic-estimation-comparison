@@ -288,6 +288,9 @@ def experiment_LSQR(args, test=None, data=None, full=False, OD=True, CP=True,
     output = out
     output['init_time'] = init_time
 
+    if A is None:
+        return output
+
     x_last, error, output = LS_postprocess([x0],x0,A,b,x_true,
                                            output=output,is_x=True)
 
