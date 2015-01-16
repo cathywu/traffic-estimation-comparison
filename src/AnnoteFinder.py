@@ -4,6 +4,8 @@ import pylab
 import matplotlib
 
 from pylab import connect, scatter
+import numpy as np
+from pprint import pprint
 
 class AnnoteFinder:
     """
@@ -34,6 +36,7 @@ class AnnoteFinder:
             self.axis= axis
         self.drawnAnnotations = {}
         self.links = []
+        np.set_printoptions(threshold=100)
 
     def distance(self, x1, x2, y1, y2):
         """
@@ -67,14 +70,14 @@ class AnnoteFinder:
             for m in markers:
                 m.set_visible(not m.get_visible())
             if len(markers) > 0 and m.get_visible():
-                print info
+                pprint(info)
             self.axis.figure.canvas.draw()
         else:
             t = axis.text(x,y, "(%3.2f, %3.2f) - %s"%(x,y,annote), )
             m = axis.scatter([x],[y], marker='d', c='r', zorder=100)
             self.drawnAnnotations[(x,y)] =(t,m)
             self.axis.figure.canvas.draw()
-            print info
+            pprint(info)
 
     def drawSpecificAnnote(self, annote):
         annotesToDraw = [(x,y,a) for x,y,a in self.data if a==annote]

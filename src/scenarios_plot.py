@@ -11,6 +11,7 @@ from matplotlib.patches import Rectangle
 from matplotlib.text import Text
 from pylab import connect, scatter, plot
 from AnnoteFinder import AnnoteFinder
+from Scenario import to_np
 
 def filter_valid(d):
     if 'error' in d:
@@ -19,8 +20,13 @@ def filter_valid(d):
         return False
     return True
 
-def filter_new(d):
+def filter_v2(d):
     if 'nLinks' not in d:
+        return False
+    return True
+
+def filter_v3(d):
+    if 'use_L' not in d['params']:
         return False
     return True
 
@@ -161,8 +167,89 @@ def plot_ls(s):
     """
     pass
 
-def plot_sensors_vs_constraints_ls_new(s, init=False,sparse=True, stat='mean',
-                                     caption=None,error_leq=0.01):
+def plot_sensors_vs_configs_v3(s, init=False,sparse=True, stat='mean',
+                                     caption=None,error_leq=0.01,max_NLPCP=None,
+                                     model=None,solver='LS',damp=0.0,disp=True):
+    def plot1(d, title, color='b', config=[True,True,True,True], stat='mean'):
+        # plot nroutes vs nconstraints needed to achieve accuracy
+        # color: sensor config?
+        # size: actual # of sensors (including ODs)
+
+        nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
+        blocks = get_stats(d.itervalues(), lambda x: get_key(x,'blocks'), stat=stat)
+        NLP = get_stats(d.itervalues(), lambda x: get_key(x,'NLP'), stat=stat)
+        NCP = get_stats(d.itervalues(), lambda x: get_key(x,'NCP'), stat=stat)
+        nLconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nLinks'), stat=stat)
+        nODconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nOD'), stat=stat)
+        nLPconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nLP'), stat=stat)
+        nCPconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nCP'), stat=stat)
+        nTotalConstraints = config[0] * nLconstraints + config[1] * nODconstraints \
+                            + config[2] * nLPconstraints + config[3] * nCPconstraints
+        nTotalSensors = config[0] * nLconstraints + config[1] * nODconstraints \
+                        + config[2] * NCP + config[3] * NLP
+
+        duration = get_stats(d.itervalues(), lambda x: get_key(x,'duration'), stat=stat)
+        perflow_wrong = get_stats(d.itervalues(), lambda x: get_key(x,'perflow'), stat=stat)
+
+        note = [{'nL constraints': a, 'nOD constraints': b,
+                 'nLP constraints': c, 'nCP constraints': e, 'NLP': f, 'NCP': g,
+                 'blocks' : h, 'duration' : "{:.5f}".format(i),
+                 'perflow wrong' : "{:.5f}".format(j),
+                 } for (a,b,c,e,f,g,h,i,j) in zip(nLconstraints,nODconstraints,
+                                              nLPconstraints,nCPconstraints,NLP,
+                                              NCP,blocks,duration,perflow_wrong)]
+        info = [x[0] for x in d.itervalues()]
+
+        max_size = np.max(nTotalSensors)
+        size = 40/max_size * nTotalSensors
+        labels = [json.dumps(x,sort_keys=True, indent=4) for x in note]
+
+        plot_scatter(nroutes,nTotalSensors,c=colors,s=size,label=labels,info=info,
+                     alpha=0.2)
+
+        plt.title(title)
+        plt.xlabel('Number of routes')
+        plt.ylabel('Number of total sensor constraints')
+        plt.ylim(np.max([plt.ylim()[0]],0),plt.ylim()[1])
+        plt.xlim(np.max([0,plt.xlim()[0]]),plt.xlim()[1])
+
+    suptitle = "Size = # of sensors [solver=%s,model=%s,sparse=%s,init=%s,stat=%s,LP=^,CP=v]"
+    title1 = 'Sensor selection vs config'
+
+    if solver == 'LS':
+        match_by = [('solver',solver),('sparse',sparse),('init',init)]
+    elif solver == 'LSQR':
+        match_by = [('solver',solver),('damp',damp)]
+    if model is not None:
+        match_by.append(('model',model))
+    leq = [('percent flow allocated incorrectly',error_leq)]
+    if max_NLPCP is not None:
+        leq.append(('NLPCP',max_NLPCP))
+
+    sensor_configs = [(True,True,True,True), (True,True,False,False),
+                      (False,False,True,True),(False,False,True,False),
+                      (False,False,False,True),(True,False,False,False),
+                      (False,True,False,False)]
+    sensor_param = ['use_L','use_OD','use_CP','use_LP']
+    colors = ['b','g','r','c','m','y','k']
+
+    fig = plt.figure()
+    for (config,color) in zip(sensor_configs,colors):
+        match_by_sensor = zip(sensor_param,config)
+        d = filter(s,group_by=['nroutes','NLP'], match_by=match_by + match_by_sensor,leq=leq)
+        plot1(d, title1, config=config, color=color, stat=stat)
+        plt.hold(True)
+
+    plt.legend(['All','L/OD','CP/LP','CP','LP','L','OD'])
+    fig.suptitle("%s %s" % (suptitle % (solver,model,sparse,init,stat),caption), fontsize=8)
+
+    if disp:
+        show()
+
+
+def plot_sensors_vs_constraints_v2(s, init=False,sparse=True, stat='mean',
+                                     caption=None,error_leq=0.01,max_NLPCP=None,
+                                     model=None,solver='LS',damp=0.0,disp=True):
     """
     Plot the types and number of sensors needed to achieve 95%+ accuracy
     NEW, i.e. experiments have recorded sizes for b,d,f,g
@@ -217,20 +304,31 @@ def plot_sensors_vs_constraints_ls_new(s, init=False,sparse=True, stat='mean',
         plt.ylim(np.max([plt.ylim()[0]],0),plt.ylim()[1])
         plt.xlim(np.max([0,plt.xlim()[0]]),plt.xlim()[1])
 
-    suptitle = "Size = fixed [sparse=%s,init=%s,stat=%s,LP=^,CP=v]"
+    suptitle = "Size = fixed [solver=%s,model=%s,sparse=%s,init=%s,stat=%s,LP=^,CP=v]"
     title1 = 'NLP+NCP sensors vs constraints'
-    d = filter(s,group_by=['nroutes','NLP'],
-               match_by=[('solver','LS'),('sparse',sparse),('init',init)],
-               leq=[('percent flow allocated incorrectly',error_leq),('NLPCP',350)])
+
+    if solver == 'LS':
+        match_by = [('solver',solver),('sparse',sparse),('init',init)]
+    elif solver == 'LSQR':
+        match_by = [('solver',solver),('damp',damp)]
+    if model is not None:
+        match_by.append(('model',model))
+    leq = [('percent flow allocated incorrectly',error_leq)]
+    if max_NLPCP is not None:
+        leq.append(('NLPCP',max_NLPCP))
+
+    d = filter(s,group_by=['nroutes','NLP'], match_by=match_by,leq=leq)
     if len(d.keys()) > 0:
         fig = plt.figure()
-        fig.suptitle("%s %s" % (suptitle % (sparse,init,stat),caption), fontsize=8)
+        fig.suptitle("%s %s" % (suptitle % (solver,model,sparse,init,stat),caption), fontsize=8)
         plot1(d, title1, stat=stat)
 
-    show()
+    if disp:
+        show()
 
-def plot_nroutes_vs_sensors_ls_P_new(s, init=False,sparse=True, stat='mean',
-                                 caption=None,error_leq=0.01):
+def plot_nroutes_vs_sensors_v2(s, init=False,sparse=True, stat='mean',
+                                 caption=None,error_leq=0.01,max_NLPCP=None,
+                                 model=None,solver='LS',damp=0.0,disp=True):
     """
     Plot the types and number of sensors needed to achieve 95%+ accuracy
     NEW, i.e. experiments have recorded sizes for b,d,f,g
@@ -253,7 +351,7 @@ def plot_nroutes_vs_sensors_ls_P_new(s, init=False,sparse=True, stat='mean',
                                         perflow_wrong)]
         info = [x[0] for x in d.itervalues()]
 
-        size = blocks / nroutes
+        size = 2
         labels = [json.dumps(x,sort_keys=True, indent=4) for x in note]
 
         plot_scatter(nroutes,nLconstraints,c='b',s=size,label=labels,info=info,
@@ -288,7 +386,7 @@ def plot_nroutes_vs_sensors_ls_P_new(s, init=False,sparse=True, stat='mean',
 
         # Color and size information
         colors = nLPCPconstraints
-        size = blocks / nroutes
+        size = 2
         labels = [json.dumps(x,sort_keys=True, indent=4) for x in note]
 
         plot_scatter(nroutes,NLPCP,c=colors,s=size,label=labels,info=info,
@@ -306,23 +404,34 @@ def plot_nroutes_vs_sensors_ls_P_new(s, init=False,sparse=True, stat='mean',
         plt.ylim(np.max([plt.ylim()[0]],0),plt.ylim()[1])
         plt.xlim(np.max([0,plt.xlim()[0]]),plt.xlim()[1])
 
-    suptitle = "Size = NCP [sparse=%s,init=%s,stat=%s]"
+    suptitle = "Size = NCP [solver=%s,model=%s,sparse=%s,init=%s,stat=%s]"
     title1 = 'nroutes vs sensors'
-    d = filter(s,group_by=['nroutes','NLP'],
-               match_by=[('solver','LS'),('sparse',sparse),('init',init)],
-               leq=[('percent flow allocated incorrectly',error_leq)])
+
+    if solver == 'LS':
+        match_by = [('solver',solver),('sparse',sparse),('init',init)]
+    elif solver == 'LSQR':
+        match_by = [('solver',solver),('damp',damp)]
+    if model is not None:
+        match_by.append(('model',model))
+    leq = [('percent flow allocated incorrectly',error_leq)]
+    if max_NLPCP is not None:
+        leq.append(('NLPCP',max_NLPCP))
+
+    d = filter(s,group_by=['nroutes','NLP'], match_by=match_by,leq=leq)
     if len(d.keys()) > 0:
         fig = plt.figure()
-        fig.suptitle("%s %s" % (suptitle % (sparse,init,stat),caption), fontsize=8)
+        fig.suptitle("%s %s" % (suptitle % (solver,model,sparse,init,stat),caption), fontsize=8)
         plt.subplot(121)
         plot(d, title1, stat=stat)
         plt.subplot(122)
         plot2(d, title1, stat=stat)
 
-    show()
+    if disp:
+        show()
 
-def plot_nroutes_vs_sensors_ls_P(s, init=False,sparse=True, stat='mean',
-                                 caption=None,error_leq=0.01):
+def plot_nroutes_vs_sensors(s, init=False,sparse=True, stat='mean',
+                                 caption=None,error_leq=0.01,model=None,
+                                 solver='LS',damp=0.0,disp=True,max_NLPCP=None):
     """
     Plot the types and number of sensors needed to achieve 95%+ accuracy
     :param s:
@@ -359,20 +468,29 @@ def plot_nroutes_vs_sensors_ls_P(s, init=False,sparse=True, stat='mean',
         plt.ylim(np.max([plt.ylim()[0]],0),plt.ylim()[1])
         plt.xlim(np.max([0,plt.xlim()[0]]),plt.xlim()[1])
 
-    suptitle = "Size = NCP [sparse=%s,init=%s,stat=%s]"
+    suptitle = "Size = NCP [solver=%s,model=%s,sparse=%s,init=%s,stat=%s]"
     title1 = 'nroutes vs NLP'
-    d = filter(s,group_by=['nroutes','NLP'],
-               match_by=[('solver','LS'),('sparse',sparse),('init',init)],
-               leq=[('percent flow allocated incorrectly',error_leq)])
+    if solver == 'LS':
+        match_by = [('solver',solver),('sparse',sparse),('init',init)]
+    elif solver == 'LSQR':
+        match_by = [('solver',solver),('damp',damp)]
+    if model is not None:
+        match_by.append(('model',model))
+    leq = [('percent flow allocated incorrectly',error_leq)]
+    if max_NLPCP is not None:
+        leq.append(('NLPCP',max_NLPCP))
+
+    d = filter(s,group_by=['nroutes','NLP'], match_by=match_by,leq=leq)
     if len(d.keys()) > 0:
         fig = plt.figure()
-        fig.suptitle("%s %s" % (suptitle % (sparse,init,stat),caption), fontsize=8)
+        fig.suptitle("%s %s" % (suptitle % (solver,model,sparse,init,stat),caption), fontsize=8)
         plot(d, title1, stat=stat)
 
-    show()
+    if disp:
+        show()
 
 def plot_nroutes_vs_nblocks_init_ls(s, sparse=True, stat='mean', error_leq=1,
-                                    caption=None):
+                                    caption=None,solver='LS',disp=True):
     def plot(d, title, stat='mean', marker=None, init=None, colorbar=True,
              error_leq=1):
         nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
@@ -406,7 +524,7 @@ def plot_nroutes_vs_nblocks_init_ls(s, sparse=True, stat='mean', error_leq=1,
         plt.ylim(np.max([plt.ylim()[0],0]),1)
         plt.xlim(np.max([0,plt.xlim()[0]]),plt.xlim()[1])
 
-    suptitle = "[method=BB,sparse=%s,stat=%s; init=^, not=v]"
+    suptitle = "[solver=%s,method=BB,sparse=%s,stat=%s; init=^, not=v]"
     title = "nroutes vs ratio to blocks"
     inits = [True,False]
     colors = ['r','b']
@@ -430,11 +548,14 @@ def plot_nroutes_vs_nblocks_init_ls(s, sparse=True, stat='mean', error_leq=1,
             plot(d, title, stat=stat, marker=marker,
                  init=init, colorbar=init, error_leq=error_leq)
             plt.hold(True)
-    fig.suptitle("%s %s" % (suptitle % (sparse,stat),caption), fontsize=8)
-    show()
+    fig.suptitle("%s %s" % (suptitle % (solver,sparse,stat),caption), fontsize=8)
 
-def plot_nroutes_vs_nblocks_ls(s, init=False,sparse=True, stat='mean',
-                               yaxis='blocks', caption=None):
+    if disp:
+        show()
+
+def plot_nroutes_vs_nblocks(s, init=False,sparse=True, stat='mean',
+                               yaxis='blocks', caption=None,model=None,
+                               solver='LS',damp=0.0,disp=True):
     def plot_ratio(d, title, stat='mean',yaxis='blocks'):
         nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
         if yaxis=='blocks+obj':
@@ -504,34 +625,41 @@ def plot_nroutes_vs_nblocks_ls(s, init=False,sparse=True, stat='mean',
         xy = xrange(0,int(plt.xlim()[1]),25)
         plt.plot(xy,xy)
 
-    suptitle = "[%s,sparse=%s,init=%s,stat=%s]"
+    suptitle = "[solver=%s,model=%s,method=%s,sparse=%s,init=%s,stat=%s]"
     title1 = "nroutes vs %s" % yaxis
     title2 = "nroutes vs ratio to %s" % yaxis
     methods = ['BB','LBFGS','DORE']
 
+    if solver == 'LS':
+        match_by = [('solver',solver),('sparse',sparse),('init',init)]
+    elif solver == 'LSQR':
+        match_by = [('solver',solver),('damp',damp)]
+    if model is not None:
+        match_by.append(('model',model))
+
     for method in methods:
         d = filter(s,group_by=['nroutes','blocks'],
-                   match_by=[('sparse',sparse),('method',method),('init',init)])
+                   match_by=match_by + [('method',method)])
         if len(d.keys()) > 0:
             fig = plt.figure()
-            fig.suptitle("%s %s" % (suptitle % (method,sparse,init,stat),caption), fontsize=8)
+            fig.suptitle("%s %s" % (suptitle % (solver,model,method,sparse,init,stat),caption), fontsize=8)
             plt.subplot(121)
             plot(d, title1, stat=stat, yaxis=yaxis)
             plt.subplot(122)
             plot_ratio(d, title2, stat=stat, yaxis=yaxis)
 
-    show()
+    if disp:
+        show()
 
 if __name__ == "__main__":
     import config as c
     files = os.listdir(c.RESULT_DIR)
     curr_input = None
 
-    scenarios_ls_P = []
-    scenarios_ls_UE = []
-    scenarios_ls_SO = []
+    scenarios = []
     scenarios_all_links = []
-    scenarios_new = []
+    scenarios_v2 = []
+    scenarios_v3 = []
 
     for file in files:
         filename = "%s/%s" % (c.RESULT_DIR,file)
@@ -550,26 +678,18 @@ if __name__ == "__main__":
                     continue
                 if not filter_valid(d):
                     continue
-                if isp(d,'solver','LS') and isp(d,'model','P'):
-                    scenarios_ls_P.append(d)
-                if isp(d,'solver','LS') and isp(d,'model','UE'):
-                    scenarios_ls_UE.append(d)
-                if isp(d,'solver','LS') and isp(d,'model','SO'):
-                    scenarios_ls_SO.append(d)
+                if 'var' in d:
+                    d['var'] = to_np(d['var'])
+                scenarios.append(d)
                 if filter_all_links(d):
                     scenarios_all_links.append(d)
-                if filter_new(d):
-                    scenarios_new.append(d)
-
-    # plot_nroutes_vs_nblocks_ls_P(scenarios_ls_P, init=True, sparse=True)
-
-    # Collect groups of scenarios
-    scenarios_ls = []
-    scenarios_ls.extend(scenarios_ls_P)
-    scenarios_ls.extend(scenarios_ls_UE)
-    scenarios_ls.extend(scenarios_ls_SO)
+                if filter_v2(d):
+                    scenarios_v2.append(d)
+                if filter_v3(d):
+                    scenarios_v3.append(d)
 
     # Plot configuration
+    init = False
     sparse = False
     yaxis = 'blocks'
     error = 0.10
@@ -577,40 +697,53 @@ if __name__ == "__main__":
     # caption = """This plot compares accuracy (%% error), duration, and the number of blocks, as the number of routes considered grows (which is
     # a function of the network and nroutes parameter. To the left, we have on the yaxis the number of %s; the right plot shows the same information but displays a
     # ratio of the %s over the number of routes instead.""" % (yaxis, yaxis)
-    # plot_nroutes_vs_nblocks_ls(scenarios_ls, init=False, sparse=sparse,
-    #                            yaxis=yaxis, caption=caption)
+    # plot_nroutes_vs_nblocks(scenarios, init=init, sparse=sparse,
+    #                            yaxis=yaxis, caption=caption, solver='LS', model='P')
     # caption = """This plot is the same as the previous, but displays results for ONLY the LS/UE experiments"""
-    # plot_nroutes_vs_nblocks_ls(scenarios_ls_UE, init=False, sparse=sparse,
-    #                            yaxis=yaxis, caption=caption)
+    # plot_nroutes_vs_nblocks(scenarios, init=init, sparse=sparse,
+    #                            yaxis=yaxis, caption=caption, solver='LS', model='UE')
     # caption = """This plot is the same as the previous, but displays results for ONLY the LS/SO experiments"""
-    # plot_nroutes_vs_nblocks_ls(scenarios_ls_SO, init=False, sparse=sparse,
-    #                            yaxis=yaxis, caption=caption)
+    # plot_nroutes_vs_nblocks(scenarios, init=init, sparse=sparse,
+    #                            yaxis=yaxis, caption=caption, solver='LS', model='SO')
     # # FIXME all_links does nothing for P networks
     # caption = """This plot is also the same, but displays results for only experiments flagged "all_links", which unforunately only makes a difference for
     # the UE/SO experiments."""
-    # plot_nroutes_vs_nblocks_ls(scenarios_all_links, init=False, sparse=sparse,
+    # plot_nroutes_vs_nblocks(scenarios_all_links, init=init, sparse=sparse,
     #                            yaxis=yaxis, caption=caption)
     # caption = """This plot first filters LS/P experiments that get %0.2f+ route flow accuracy, then looks at the number of selected sensors (LP on the yaxis,
     # CP encoded in color). Unfortunately, this doesn't give a sense of how much information is from OD pairs, links, and also how much information is
     # provided by the LP/CP sensors in aggregate""" % error
-    # plot_nroutes_vs_sensors_ls_P(scenarios_ls_P, init=False, sparse=sparse,
-    #                              caption=caption,error_leq=error)
+    # plot_nroutes_vs_sensors(scenarios, init=init, sparse=sparse,
+    #                              caption=caption,error_leq=error,solver='LS',model='P')
     # caption = """This plot is the same as the previous but better (but with less data for now) because we have also recorded the number of constraints that
     # come from the various sensors. CAUTION: it is the number of resulting constraints, NOT the number of sensors of each type, that is displayed."""
-    # plot_nroutes_vs_sensors_ls_P_new(scenarios_new, init=False, sparse=sparse,
-    #                              caption=caption,error_leq=error)
-    # FIXME I'm running more experiments in the empty space, check back in a bit
-    caption = """For LS experiments that perform well, this plot shows the makeup of LP/CP sensors"""
-    plot_sensors_vs_constraints_ls_new(scenarios_new, init=False, sparse=sparse,
-                                     caption=caption,error_leq=error)
-    ############
-    caption = """Now we start to look at if initializing the LS solver with a guess based off of the equality constraint yields any performance improvement.
-    The answer looks like yes with regards to accuracy but no with regards to runtime. I think this is bad news."""
-    plot_nroutes_vs_nblocks_init_ls(scenarios_ls, sparse=sparse,
-                                    caption=caption)
-    ############
-    caption = """This is basically the same plot, but we filter for experiments that are %0.2f+ accurate in route flow""" % error
-    plot_nroutes_vs_nblocks_init_ls(scenarios_ls, sparse=sparse, error_leq=error,
-                                    caption=caption)
+    # plot_nroutes_vs_sensors_v2(scenarios_v2, init=False, sparse=sparse,
+    #                              caption=caption,error_leq=error,solver='LS',model='P',disp=False)
+    # plot_nroutes_vs_sensors_v2(scenarios_v3, init=False, sparse=sparse,
+    #                            caption=caption,error_leq=error,solver='LSQR',model='P')
+    # # FIXME I'm running more experiments in the empty space, check back in a bit
+    # caption = """For LS experiments that perform well, this plot shows the makeup of LP/CP sensors"""
+    # plot_sensors_vs_constraints_v2(scenarios_v2, init=False, sparse=sparse,
+    #                                  caption=caption,error_leq=error,max_NLPCP=350,
+    #                                  solver='LS',disp=False)
+    # plot_sensors_vs_constraints_v2(scenarios_v2, init=False, sparse=sparse,
+    #                                    caption=caption,error_leq=error,max_NLPCP=350,
+    #                                    solver='LSQR')
+    # ############
+    # caption = """Now we start to look at if initializing the LS solver with a guess based off of the equality constraint yields any performance improvement.
+    # The answer looks like yes with regards to accuracy but no with regards to runtime. I think this is bad news."""
+    # plot_nroutes_vs_nblocks_init_ls(scenarios_ls, sparse=sparse,
+    #                                 caption=caption)
+    # ############
+    # caption = """This is basically the same plot, but we filter for experiments that are %0.2f+ accurate in route flow""" % error
+    # plot_nroutes_vs_nblocks_init_ls(scenarios_ls, sparse=sparse, error_leq=error,
+    #                                 caption=caption)
+    caption = """This is the first plot with LSQR results; it shows the total number of constraints for experiments with a %0.2f+ route flow accuracy, colored
+    by the sensor configuration, and sized by the number of actual sensors"""
+    plot_sensors_vs_configs_v3(scenarios_v3, sparse=sparse,solver='LSQR',
+                                caption=caption,error_leq=error,max_NLPCP=350)
+
+    # PLOT LS vs LSQ
+
 
 

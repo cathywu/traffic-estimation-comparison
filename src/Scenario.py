@@ -60,6 +60,16 @@ def parser():
     parser.add_argument('--all_links',dest='all_links',action='store_true',
                         default=False,help='All links observed (false)')
 
+    # Sensor toggles
+    parser.add_argument('--use_L',dest='use_L',action='store_false',
+                        default=True,help='Use L sensors (true)')
+    parser.add_argument('--use_OD',dest='use_OD',action='store_false',
+                        default=True,help='Use OD sensors (true)')
+    parser.add_argument('--use_CP',dest='use_CP',action='store_false',
+                        default=True,help='Use CP sensors (true)')
+    parser.add_argument('--use_LP',dest='use_LP',action='store_false',
+                        default=True,help='Use LP sensors (true)')
+
     # LS solver only
     parser.add_argument('--method',dest='method',type=str,default='BB',
                         help='LS only: Least squares method')
@@ -105,6 +115,12 @@ def update_args(args, params):
     args.sparse = bool(params['sparse']) # sparse toggle for route flow sampling
     if 'all_links' in params:
         args.all_links = bool(params['all_links'])
+
+    # Sensor toggles
+    args.use_L = bool(params['use_L'])
+    args.use_OD = bool(params['use_OD'])
+    args.use_CP = bool(params['use_CP'])
+    args.use_LP = bool(params['use_LP'])
 
     # Sensor configurations
     args.NLP = int(params['NLP']) # number of linkpath sensors (sampled randomly)
@@ -491,7 +507,9 @@ def scenario(params=None, log='INFO'):
     elif args.solver == 'LS':
         output = experiment_LS(args, full=args.all_links, init=args.init, data=data)
     elif args.solver == 'LSQR':
-        output = experiment_LSQR(args, full=args.all_links, data=data)
+        output = experiment_LSQR(args, full=args.all_links, links=args.use_L,
+                                 OD=args.use_OD, CP=args.use_CP, LP=args.use_LP,
+                                 data=data)
 
     if args.output == True:
         print output
