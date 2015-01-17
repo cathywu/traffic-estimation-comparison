@@ -198,29 +198,47 @@ def generate_data_UE(data=None, export=False, SO=False, trials=10, demand=3, N=3
 
 # Experimentation helper functions
 # -------------------------------------
-def experiment_BI(sparse,full=False,test=None,data=None):
+def experiment_BI(sparse, full=False, L=True, OD=True, CP=True, LP=True, data=None):
     """
     Bayesian inference experiment
     """
-    if data is None and test is not None:
-        model = load_model('%s/%s' % (c.DATA_DIR,test),sparse, full=full,
-                           OD=True, CP=True)
-    else:
-        model = create_model(data, sparse, full=full, OD=True, CP=True)
+    AA, bb_obs, EQ, x_true, scaling, out = solver_input(data, full=full, L=L,
+                                OD=OD, CP=CP, LP=LP, eq='CP', EQ_elim=False)
+    output = out
+    if EQ is None:
+        output['error'] = "EQ constraint matrix is empty"
+    model,alpha,x_pri = create_model(AA, bb_obs, EQ, x_true, sparse=sparse)
+    output['alpha'] = alpha
 
     # model = create_model('%s/%s' % (c.DATA_DIR,test),sparse)
+    if np.all(x_pri==1):
+        x_last, error, output = LS_postprocess([x_pri], x_pri, AA.todense(), bb_obs,
+                                           x_true, output=output, is_x=True)
+    else:
+        model, trace, init_time, duration = MCMC(model)
+        output['init_time'], output['duration'] = init_time, duration
 
-    model, output = MCMC(model)
-    output['A'] = model.data.A.shape
-    output['T'] = model.data.T.shape
-    output['U'] = model.data.U.shape
-    output['alpha'] = model.data.alpha
+        x_blocks = None
+        for varname in sorted(trace.varnames):
+            # flatten the trace and normalize
+            if trace.get_values(varname).shape[1] == 0:
+                continue
+            x_block = np.array([x/sum(x) for x in trace.get_values(varname)])
+            if x_blocks is not None:
+                x_blocks = np.hstack((x_blocks, x_block))
+            else:
+                x_blocks = x_block
+
+        x_last, error, output = LS_postprocess([x_blocks], x_blocks[:,0], AA.todense(),
+                                    bb_obs, x_true, output=output, is_x=True)
+    output['blocks'] = EQ.shape[0] if EQ is not None else None
     return output
 
 def experiment_TA():
     pass
 
-def experiment_CS(test=None, full=False, data=None):
+def experiment_CS(test=None, full=False, L=True, OD=True, CP=True, LP=True,
+                  data=None):
     # CS test config
     CS_PATH = '/Users/cathywu/Dropbox/Fa13/EE227BT/traffic-project'
     OUT_PATH = '%s/data/output-cathywu/' % CS_PATH
@@ -279,11 +297,11 @@ def experiment_CS(test=None, full=False, data=None):
     print 'max|f * (x-x_true)|: %.5f\n\n\n' % \
           (dist_from_true)
 
-def experiment_LSQR(args, test=None, data=None, full=False, OD=True, CP=True,
-                    LP=True, init=True, links=True, damp=0.0):
+def experiment_LSQR(args, test=None, data=None, full=False, L=True, OD=True,
+                    CP=True, LP=True, damp=0.0):
     init_time = time.time()
-    A, b, x0, x_true, out = solver_input(data, full=full, OD=OD, CP=CP, LP=LP,
-                                        links=links,solve=True,damp=damp)
+    A, b, x0, x_true, out = solver_input(data, full=full, L=L, OD=OD, CP=CP,
+                                         LP=LP, solve=True, damp=damp)
     init_time = time.time() - init_time
     output = out
     output['init_time'] = init_time
@@ -297,8 +315,8 @@ def experiment_LSQR(args, test=None, data=None, full=False, OD=True, CP=True,
     output['duration'], output['iters'], output['times'] = 0, [0], [0]
     return output
 
-def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
-                    LP=True, eq='CP', init=True):
+def experiment_LS(args, test=None, data=None, full=True, L=True, OD=True,
+                  CP=True, LP=True, eq='CP', init=True):
     """
     Least squares experiment
     :param test:
@@ -310,10 +328,12 @@ def experiment_LS(args, test=None, data=None, full=True, OD=True, CP=True,
     if data is None and test is not None:
         fname = '%s/%s' % (c.DATA_DIR,test)
         A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0, out = \
-            load_data(fname, full=full, OD=OD, CP=CP, LP=LP, eq=eq, init=init)
+            load_data(fname, full=full, L=L, OD=OD, CP=CP, LP=LP, eq=eq,
+                      init=init)
     else:
         A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0, out = \
-            solver_input(data, full=full, OD=OD, CP=CP, LP=LP, eq=eq, init=init)
+            solver_input(data, full=full, L=L, OD=OD, CP=CP, LP=LP,
+                         eq=eq, init=init)
     init_time = time.time() - init_time
     output = out
     output['init_time'] = init_time
@@ -504,15 +524,18 @@ def scenario(params=None, log='INFO'):
             return {'error' : data['error']}
 
     if args.solver == 'CS':
-        output = experiment_CS(test=type, full=args.all_links, data=data)
+        output = experiment_CS(test=type, full=args.all_links, L=args.use_L,
+                    OD=args.use_OD, CP=args.use_CP, LP=args.use_LP, data=data)
     elif args.solver == 'BI':
-        output = experiment_BI(args.sparse, full=args.all_links, data=data)
+        output = experiment_BI(args.sparse, full=args.all_links, L=args.use_L,
+                    OD=args.use_OD, CP=args.use_CP, LP=args.use_LP, data=data)
     elif args.solver == 'LS':
-        output = experiment_LS(args, full=args.all_links, init=args.init, data=data)
+        output = experiment_LS(args, full=args.all_links, init=args.init,
+                    L=args.use_L, OD=args.use_OD, CP=args.use_CP,
+                    LP=args.use_LP, data=data)
     elif args.solver == 'LSQR':
-        output = experiment_LSQR(args, full=args.all_links, links=args.use_L,
-                                 OD=args.use_OD, CP=args.use_CP, LP=args.use_LP,
-                                 data=data)
+        output = experiment_LSQR(args, full=args.all_links, L=args.use_L,
+                    OD=args.use_OD, CP=args.use_CP, LP=args.use_LP, data=data)
 
     if args.output == True:
         print output

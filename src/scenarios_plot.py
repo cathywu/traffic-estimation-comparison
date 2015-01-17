@@ -21,7 +21,7 @@ def filter_valid(d):
     return True
 
 def filter_v2(d):
-    if 'nLinks' not in d:
+    if 'nLinks' not in d and 'nOD' not in d and 'nCP' not in d and 'nLP' not in d:
         return False
     return True
 
@@ -53,7 +53,8 @@ def plot_scatter(x,y,c=None,s=None,label=None,info=None,alpha=1.0,marker='o',
 
 def filter(s,group_by=[],match_by=[],geq=[],leq=[]):
     d = {}
-    valid = ['nroutes','nsensors','blocks','percent flow allocated incorrectly','NLPCP']
+    valid = ['nroutes','nsensors','blocks','percent flow allocated incorrectly',
+             'NLPCP','use_L','use_OD','use_CP','use_LP']
     for x in s:
         match = True
         for (param,value) in match_by:
@@ -106,7 +107,11 @@ def get_key(d,key):
     elif key == 'nLPCP':
         return d['nLP'] + d['nCP']
     elif key in ['nLinks','nOD','nCP','nLP','duration']:
-        return d[key]
+        # CAUTION: only works for v2+
+        return d[key] if key in d else 0
+    elif key in ['use_L','use_OD','use_CP','use_LP']:
+        # CAUTION: only works for v2+
+        return d['params'][key] if key in d['params'] else True
     else:
         return d['params'][key]
 
@@ -184,7 +189,7 @@ def plot_sensors_vs_configs_v3(s, init=False,sparse=True, stat='mean',
         nLPconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nLP'), stat=stat)
         nCPconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nCP'), stat=stat)
         nTotalConstraints = config[0] * nLconstraints + config[1] * nODconstraints \
-                            + config[2] * nLPconstraints + config[3] * nCPconstraints
+                            + config[2] * nCPconstraints + config[3] * nLPconstraints
         nTotalSensors = config[0] * nLconstraints + config[1] * nODconstraints \
                         + config[2] * NCP + config[3] * NLP
 
@@ -194,10 +199,12 @@ def plot_sensors_vs_configs_v3(s, init=False,sparse=True, stat='mean',
         note = [{'nL constraints': a, 'nOD constraints': b,
                  'nLP constraints': c, 'nCP constraints': e, 'NLP': f, 'NCP': g,
                  'blocks' : h, 'duration' : "{:.5f}".format(i),
-                 'perflow wrong' : "{:.5f}".format(j),
-                 } for (a,b,c,e,f,g,h,i,j) in zip(nLconstraints,nODconstraints,
+                 'perflow wrong' : "{:.5f}".format(j), 'total constraints': k,
+                 'total sensors': l,
+                 } for (a,b,c,e,f,g,h,i,j,k,l) in zip(nLconstraints,nODconstraints,
                                               nLPconstraints,nCPconstraints,NLP,
-                                              NCP,blocks,duration,perflow_wrong)]
+                                              NCP,blocks,duration,perflow_wrong,
+                                              nTotalConstraints,nTotalSensors)]
         info = [x[0] for x in d.itervalues()]
 
         # max_size = np.max(nTotalSensors)
@@ -683,8 +690,18 @@ if __name__ == "__main__":
                     continue
                 if not filter_valid(d):
                     continue
+                # Minor correction: get rid of 'var'
                 if 'var' in d:
                     d['var'] = to_np(d['var'])
+                # Minor correction: for <v2, default NL/NB/NS=100
+                if not filter_v3(d): # FIXME add new versions as needed
+                    if d['params']['NL'] == 0:
+                        d['params']['NL'] = 100
+                    if d['params']['NB'] == 0:
+                        d['params']['NB'] = 100
+                    if d['params']['NS'] == 0:
+                        d['params']['NS'] = 100
+
                 scenarios.append(d)
                 if filter_all_links(d):
                     scenarios_all_links.append(d)
@@ -746,7 +763,7 @@ if __name__ == "__main__":
     caption = """This is the first plot with LSQR results; it shows the total number of constraints for experiments with a %0.2f+ route flow accuracy, colored
     by the sensor configuration, and sized by the number of actual sensors"""
     plot_sensors_vs_configs_v3(scenarios_v3, sparse=sparse,solver='LSQR',
-                                caption=caption,error_leq=error,max_NLPCP=350)
+                                caption=caption,error_leq=error,max_NLPCP=100)
     caption = """Same but for LS"""
     plot_sensors_vs_configs_v3(scenarios_v2, sparse=sparse,solver='LS',
                                caption=caption,error_leq=error,max_NLPCP=350)
