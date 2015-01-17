@@ -3,17 +3,22 @@ import json
 import numpy as np
 import random
 
+def new_s():
+    return {'solver': 'LS', 'model': 'P', 'sparse': False, 'noise': 0.0,
+            'all_links': False, 'use_L': True, 'use_OD': True, 'use_CP': True,
+            'use_LP': True, 'NLP': 0, 'NB': 0, 'NS': 0, 'NL': 0}
+
 def chunk(l, n):
     """ Yield successive n-sized chunks from l.
     """
     for i in xrange(0, len(l), n):
         yield l[i:i+n]
 
-def set_sensors(s, prop, NLP_max, NB_max, NS_max, NL_max):
-    s['NLP'] = np.ceil(NLP_max * prop)
-    s['NB'] = np.ceil(NB_max * prop)
-    s['NS'] = np.ceil(NS_max * prop)
-    s['NL'] = np.ceil(NL_max * prop)
+def set_sensors(s, prop, NLP_max=None, NB_max=None, NS_max=None, NL_max=None):
+    s['NLP'] = np.ceil(NLP_max * prop) if NLP_max is not None else 0
+    s['NB'] = np.ceil(NB_max * prop) if NB_max is not None else 0
+    s['NS'] = np.ceil(NS_max * prop) if NS_max is not None else 0
+    s['NL'] = np.ceil(NL_max * prop) if NL_max is not None else 0
     return s
 
 def dump(scenarios, filename):
@@ -23,11 +28,14 @@ def dump(scenarios, filename):
             out.write('%s\n' % json.dumps(s))
 
 def check_scenario(s):
-    check_keys(s,['solver','model','sparse','NLP','NB','NS','NL'])
+    check_keys(s,['solver','model','sparse','NLP','NB','NS','NL','use_L','use_OD',
+                  'use_CP','use_LP'])
     if s['model'] == 'P':
         check_keys(s,['nrow','ncol','nodroutes'])
     if s['solver'] == 'LS':
         check_keys(s,['method','init'])
+    if s['solver'] == 'LSQR':
+        check_keys(s,['damp'])
 
 def check_keys(d,keys):
     for key in keys:
@@ -119,20 +127,19 @@ def test_all_sampled(outfile='scenarios_all_sampled.txt'):
 
     return scenarios
 
-def test_bayesian_inference(outfile='scenarios_bayesian_inference.txt',n=16):
+def test_bayesian_inference(outfile='scenarios_bayesian_inference.1.txt'):
     iterations = 1
     solvers = ['BI']
-    proportions = [0.5, 1]
-    EQ_NLP_max, EQ_NB_max, EQ_NS_max, EQ_NL_max = 122, 128, 128, 128
-    nrow_min, nrow_max, ncol_min, ncol_max, row_step, col_step = 1,11,2,11,3,2
+    proportions = [0.25, 0.5, 1]
+    EQ_NLP_max, EQ_NB_max, EQ_NS_max, EQ_NL_max = 20, 20, 0, 0
+    nrow_min, nrow_max, ncol_min, ncol_max, row_step, col_step = 1,5,2,5,1,1
 
-    some = test_basic(iterations=iterations,proportions=proportions,
+    scenarios = test_basic(iterations=iterations,proportions=proportions,
                       solvers=solvers,nrow_min=nrow_min,nrow_max=nrow_max,
                       row_step=row_step,ncol_min=ncol_min,
                       ncol_max=ncol_max,col_step=col_step,
                       EQ_NLP_max=EQ_NLP_max,EQ_NB_max=EQ_NB_max,
                       EQ_NS_max=EQ_NB_max,EQ_NL_max=EQ_NL_max)
-    scenarios = random.sample(some,n)
 
     for s in scenarios:
         check_scenario(s)
@@ -282,7 +289,7 @@ def test_basic(iterations=1,proportions=[1],solvers=['LS'],
     scenarios = []
 
     for i in xrange(iterations):
-        s = {}
+        s = new_s()
         s['trial'] = i
         for solver in solvers:
             s['solver'], s['sparse'] = solver, sparse
@@ -335,7 +342,7 @@ def test_UE_basic(models=['UE','SO'],iterations=1,proportions=[1],solvers=['LS']
     scenarios = []
 
     for i in xrange(iterations):
-        s = {}
+        s = new_s()
         s['trial'] = i
         for solver in solvers:
             s['solver'], s['sparse'] = solver, False
@@ -463,7 +470,7 @@ def test_test(outfile='scenarios_test.txt'):
 
 if __name__ == "__main__":
     # test_test()
-    # test_bayesian_inference()
+    test_bayesian_inference()
     # test_small()
     # test_all()
     # test_least_squares(n=1000)
@@ -478,4 +485,4 @@ if __name__ == "__main__":
     # test_all_reduced_sensors()
     # test_all_links_UE(v=2)
     # test_all_reduced_reduced_sensors()
-    test_LSQR()
+    # test_LSQR()

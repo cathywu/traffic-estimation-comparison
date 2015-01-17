@@ -1,6 +1,7 @@
 import ipdb
 import time
 
+from pprint import pprint
 import argparse
 import logging
 
@@ -229,7 +230,7 @@ def experiment_BI(sparse, full=False, L=True, OD=True, CP=True, LP=True, data=No
             else:
                 x_blocks = x_block
 
-        x_last, error, output = LS_postprocess([x_blocks], x_blocks[:,0], AA.todense(),
+        x_last, error, output = LS_postprocess(x_blocks, x_blocks[0,:], AA.todense(),
                                     bb_obs, x_true, output=output, is_x=True)
     output['blocks'] = EQ.shape[0] if EQ is not None else None
     return output
@@ -538,7 +539,7 @@ def scenario(params=None, log='INFO'):
                     OD=args.use_OD, CP=args.use_CP, LP=args.use_LP, data=data)
 
     if args.output == True:
-        print output
+        pprint(output)
 
     return output
 
