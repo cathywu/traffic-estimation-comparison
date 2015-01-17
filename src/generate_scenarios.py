@@ -2,6 +2,7 @@
 import json
 import numpy as np
 import random
+from random import shuffle
 
 def new_s():
     return {'solver': 'LS', 'model': 'P', 'sparse': False, 'noise': 0.0,
@@ -40,7 +41,7 @@ def check_scenario(s):
 def check_keys(d,keys):
     for key in keys:
         if key not in d:
-            return "Missing %s in %s" % (key, d)
+            print "Missing %s in %s" % (key, d)
 
 def test_all_reduced_reduced_sensors(outfile='scenarios_all_reduced_reduced_sensors.txt'):
     scenarios_temp = []
@@ -254,6 +255,95 @@ def test_noise():
     fname = 'scenarios_noise.txt'
     pass
 
+def test_LSQR_LP(outfile='scenarios_LSQR_LP.txt',damp=0.0):
+    scenarios = []
+    solver = 'LSQR'
+    sensor_config = (False,False,False,True)
+
+    scenarios_grid = test_grid()
+    for s in scenarios_grid:
+        s['solver'] = solver
+        s['damp'] = damp
+        s['use_L'], s['use_OD'], s['use_CP'], s['use_LP'] = sensor_config
+        links = s['nrow'] * s['ncol'] * 2 + s['ncol'] + s['nrow'] - 2
+        if links > 50:
+            for i in range(10,links,10):
+                s['NLP'] = i
+                scenarios.append(s.copy())
+        elif links > 10:
+            step = int(links/10)
+            for i in range(0,links,step):
+                s['NLP'] = i
+                scenarios.append(s.copy())
+        else:
+            for i in range(0,links):
+                s['NLP'] = i
+                scenarios.append(s.copy())
+
+    for s in scenarios:
+        check_scenario(s)
+
+    shuffle(scenarios)
+
+    if outfile is not None:
+        dump(scenarios,outfile)
+
+    return scenarios
+
+
+def test_LSQR_CP(outfile='scenarios_LSQR_CP.txt',damp=0.0):
+    scenarios = []
+    solver = 'LSQR'
+    sensor_config = (False,False,True,False)
+
+    scenarios_grid = test_grid()
+    for s in scenarios_grid:
+        s['solver'] = solver
+        s['damp'] = damp
+        s['use_L'], s['use_OD'], s['use_CP'], s['use_LP'] = sensor_config
+        links = s['nrow'] * s['ncol'] * 2 + s['ncol'] + s['nrow'] - 2
+        if links > 50:
+            for i in range(10,links,10):
+                s['NB'] = i
+                scenarios.append(s.copy())
+        elif links > 10:
+            step = int(links/10)
+            for i in range(0,links,step):
+                s['NB'] = i
+                scenarios.append(s.copy())
+        else:
+            for i in range(0,links):
+                s['NB'] = i
+                scenarios.append(s.copy())
+
+    for s in scenarios:
+        check_scenario(s)
+
+    shuffle(scenarios)
+
+    if outfile is not None:
+        dump(scenarios,outfile)
+
+    return scenarios
+
+
+def test_LSQR_reduced(outfile='scenarios_LSQR_reduced_d%0.2f.txt',damp=0.0):
+    scenarios = []
+
+    scenarios_all = test_LSQR(outfile=None,damp=damp)
+
+    for s in scenarios_all:
+        s['NLP'] /= 4
+        s['NB'] /= 10
+        s['NL'] /= 10
+        s['NS'] /= 10
+        scenarios.append(s.copy())
+
+    if outfile is not None:
+        dump(scenarios,outfile % (damp))
+
+    return scenarios
+
 def test_LSQR(outfile='scenarios_LSQR_d%0.2f.%d.txt',N=10,damp=0.0):
     import random
     scenarios = []
@@ -264,13 +354,17 @@ def test_LSQR(outfile='scenarios_LSQR_d%0.2f.%d.txt',N=10,damp=0.0):
         (False,False,True,True),(False,False,True,False),
         (False,False,False,True),(True,False,False,False),
         (False,True,False,False)]
-    scenarios_all = test_all(outfile=None)
+    scenarios_all = test_all(outfile=None,i=1)
 
     for s in scenarios_all:
         s['solver'] = solver
         s['damp'] = damp
         s.pop('method',None)
         s.pop('init',None)
+        s['NLP'] /= 4
+        s['NB'] /= 10
+        s['NL'] /= 10
+        s['NS'] /= 10
 
         for c in sensor_configs:
             s['use_L'], s['use_OD'],s['use_CP'],s['use_LP'] = c
@@ -282,10 +376,12 @@ def test_LSQR(outfile='scenarios_LSQR_d%0.2f.%d.txt',N=10,damp=0.0):
         for i,chunkk in enumerate(chunks):
             dump(chunkk,outfile % (damp,i))
 
+    return scenarios
+
 def test_basic(iterations=1,proportions=[1],solvers=['LS'],
                nrow_min=3,nrow_max=4,row_step=1,ncol_min=4,ncol_max=5,col_step=1,
                EQ_NLP_max=122,EQ_NB_max=128,EQ_NS_max=128,EQ_NL_max=128,
-               init=False,sparse=False):
+               init=False,sparse=False, models=['UE','SO','P']):
     scenarios = []
 
     for i in xrange(iterations):
@@ -296,8 +392,10 @@ def test_basic(iterations=1,proportions=[1],solvers=['LS'],
             if solver == 'LS':
                 # TODO use the results of test_least_squares here
                 s['method'], s['init'] = 'BB', init
-
-            models = ['UE','SO','P']
+            elif solver == 'LSQR':
+                s['damp'] = 0.0
+            elif solver == 'null':
+                pass
 
             for model in models:
                 s['model'] = model
@@ -385,7 +483,7 @@ def test_UE(outfile='scenarios_UESO.txt',models=['UE','SO']):
     return scenarios
 
 
-def test_all(CS_only=False,outfile='scenarios_all.txt',init=False,sparse=False):
+def test_all(CS_only=False,outfile='scenarios_all.txt',init=False,sparse=False,i=100):
     """
     Mega test of most things
 
@@ -394,7 +492,7 @@ def test_all(CS_only=False,outfile='scenarios_all.txt',init=False,sparse=False):
     :param outfile:
     :return:
     """
-    iterations = 100
+    iterations = i
     solvers = ['CS'] if CS_only else ['LS']
     proportions = [0.1, 0.18, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9, 0.95, 1]
     EQ_NLP_max, EQ_NB_max, EQ_NS_max, EQ_NL_max = 122, 128, 128, 128
@@ -417,6 +515,20 @@ def test_all(CS_only=False,outfile='scenarios_all.txt',init=False,sparse=False):
         outfile = '%s.sparse' % outfile
     if outfile is not None:
         dump(scenarios,outfile)
+
+    return scenarios
+
+def test_grid():
+    solvers = ['null']
+    nrow_min, nrow_max, ncol_min, ncol_max, row_step, col_step = 1,11,2,11,2,2
+    models = ['P']
+
+    scenarios = test_basic(solvers=solvers,nrow_min=nrow_min,nrow_max=nrow_max,
+                           row_step=row_step,ncol_min=ncol_min,
+                           ncol_max=ncol_max,col_step=col_step,models=models)
+
+    for s in scenarios:
+        check_scenario(s)
 
     return scenarios
 
@@ -470,7 +582,7 @@ def test_test(outfile='scenarios_test.txt'):
 
 if __name__ == "__main__":
     # test_test()
-    test_bayesian_inference()
+    # test_bayesian_inference()
     # test_small()
     # test_all()
     # test_least_squares(n=1000)
@@ -486,3 +598,6 @@ if __name__ == "__main__":
     # test_all_links_UE(v=2)
     # test_all_reduced_reduced_sensors()
     # test_LSQR()
+    # test_LSQR_reduced()
+    # test_LSQR_LP()
+    test_LSQR_CP()
