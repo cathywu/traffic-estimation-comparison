@@ -255,7 +255,7 @@ def test_noise():
     fname = 'scenarios_noise.txt'
     pass
 
-def test_LSQR_LP(outfile='scenarios_LSQR_LP.txt',damp=0.0):
+def test_LSQR_LP(outfile='scenarios_LSQR_LP.%s.txt',hash=0,damp=0.0):
     scenarios = []
     solver = 'LSQR'
     sensor_config = (False,False,False,True)
@@ -265,7 +265,7 @@ def test_LSQR_LP(outfile='scenarios_LSQR_LP.txt',damp=0.0):
         s['solver'] = solver
         s['damp'] = damp
         s['use_L'], s['use_OD'], s['use_CP'], s['use_LP'] = sensor_config
-        links = s['nrow'] * s['ncol'] * 2 + s['ncol'] + s['nrow'] - 2
+        links = 2 * (s['nrow'] * s['ncol'] * 2 + s['ncol'] + s['nrow'] - 2)
         if links > 50:
             for i in range(10,links,10):
                 s['NLP'] = i
@@ -286,12 +286,12 @@ def test_LSQR_LP(outfile='scenarios_LSQR_LP.txt',damp=0.0):
     shuffle(scenarios)
 
     if outfile is not None:
-        dump(scenarios,outfile)
+        dump(scenarios,outfile % hash)
 
     return scenarios
 
 
-def test_LSQR_CP(outfile='scenarios_LSQR_CP.txt',damp=0.0):
+def test_LSQR_CP(outfile='scenarios_LSQR_CP.%s.txt',hash=0,damp=0.0):
     scenarios = []
     solver = 'LSQR'
     sensor_config = (False,False,True,False)
@@ -301,7 +301,7 @@ def test_LSQR_CP(outfile='scenarios_LSQR_CP.txt',damp=0.0):
         s['solver'] = solver
         s['damp'] = damp
         s['use_L'], s['use_OD'], s['use_CP'], s['use_LP'] = sensor_config
-        links = s['nrow'] * s['ncol'] * 2 + s['ncol'] + s['nrow'] - 2
+        links = 2 * (s['nrow'] * s['ncol'] * 2 + s['ncol'] + s['nrow'] - 2)
         if links > 50:
             for i in range(10,links,10):
                 s['NB'] = i
@@ -322,7 +322,7 @@ def test_LSQR_CP(outfile='scenarios_LSQR_CP.txt',damp=0.0):
     shuffle(scenarios)
 
     if outfile is not None:
-        dump(scenarios,outfile)
+        dump(scenarios,outfile % hash)
 
     return scenarios
 
@@ -414,7 +414,7 @@ def test_basic(iterations=1,proportions=[1],solvers=['LS'],
                                 continue
                             s['nrow'], s['ncol'] = nrow, ncol
                             s['nodroutes'] = 15 # FIXME more configurations?
-                            NLP_max = (ncol-1) * (nrow-1) * 2 + ncol + nrow - 2
+                            NLP_max = 2 * ((ncol-1) * (nrow-1) * 2 + ncol + nrow - 2)
                             NB_max = ncol * nrow * 8
                             NS_max, NL_max = 0, NLP_max
                             for prop in proportions:
@@ -559,6 +559,44 @@ def test_small(outfile='scenarios_small.txt'):
 
     return scenarios
 
+def test_grid_random(outfile='scenarios_grid_random_%s.txt',solver='LSQR',
+                     damp=0.0):
+    scenarios = []
+    solver = 'LSQR'
+    sensor_config = (False,False,True,False)
+
+    scenarios_grid = test_grid()
+    for s in scenarios_grid:
+        s['solver'] = solver
+        if solver == 'LSQR':
+            s['damp'] = damp
+        s['use_L'], s['use_OD'], s['use_CP'], s['use_LP'] = sensor_config
+        links = 2 * (s['nrow'] * s['ncol'] * 2 + s['ncol'] + s['nrow'] - 2)
+        if links > 50:
+            for i in range(10,links,10):
+                s['NB'] = i
+                scenarios.append(s.copy())
+        elif links > 10:
+            step = int(links/10)
+            for i in range(0,links,step):
+                s['NB'] = i
+                scenarios.append(s.copy())
+        else:
+            for i in range(0,links):
+                s['NB'] = i
+                scenarios.append(s.copy())
+
+    for s in scenarios:
+        check_scenario(s)
+
+    shuffle(scenarios)
+
+    if outfile is not None:
+        dump(scenarios,outfile)
+
+    return scenarios
+
+
 def test_test(outfile='scenarios_test.txt'):
     """
     For testing that EC2 instance setup is working
@@ -600,4 +638,9 @@ if __name__ == "__main__":
     # test_LSQR()
     # test_LSQR_reduced()
     # test_LSQR_LP()
-    test_LSQR_CP()
+    # test_LSQR_LP(hash=1)
+    # test_LSQR_LP(hash=2)
+    # test_LSQR_CP()
+    # test_LSQR_CP(hash=1)
+    # test_LSQR_CP(hash=2)
+    pass

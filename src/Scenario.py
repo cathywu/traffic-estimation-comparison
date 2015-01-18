@@ -39,11 +39,14 @@ from scipy.sparse import csr_matrix
 # -------------------------------------
 def to_np(X):
     return np.array(X).squeeze()
+# Clean array wrapper
+def array(x):
+    return np.atleast_1d(np.squeeze(np.array(x)))
 
 def to_sp(X):
     if X is None:
         return None
-    return csr_matrix((to_np(X.V),(to_np(X.I),to_np(X.J))), shape=X.size)
+    return csr_matrix((array(X.V),(array(X.I),array(X.J))), shape=X.size)
 
 def parser():
     parser = argparse.ArgumentParser()
@@ -168,7 +171,7 @@ def generate_data_UE(data=None, export=False, SO=False, trials=10, demand=3, N=3
     path='hadoop/los_angeles_data_2.mat'
     g, x_true, l, path_wps, wp_trajs, obs = synthetic_data(data, SO, demand, N,
                                                            path=path,fast=False)
-    x_true = to_np(x_true)
+    x_true = array(x_true)
     obs=obs[0]
     A_full = path_solver.linkpath_incidence(g)
     A = to_sp(A_full[obs,:])
@@ -178,8 +181,8 @@ def generate_data_UE(data=None, export=False, SO=False, trials=10, demand=3, N=3
 
     data = {'A_full': A_full, 'b_full': A_full.dot(x_true),
             'A': A, 'b': A.dot(x_true), 'x_true': x_true,
-            'T': to_sp(T), 'd': to_np(d),
-            'U': to_sp(U), 'f': to_np(f) }
+            'T': to_sp(T), 'd': array(d),
+            'U': to_sp(U), 'f': array(f) }
 
     if NLP is not None:
         lp = LinkPath(g,x_true,N=NLP)
@@ -238,16 +241,16 @@ def experiment_BI(sparse, full=False, L=True, OD=True, CP=True, LP=True, data=No
 def experiment_TA():
     pass
 
-def experiment_CS(test=None, full=False, L=True, OD=True, CP=True, LP=True,
-                  data=None):
+def experiment_CS(args, test=None, full=False, L=True, OD=True, CP=True, LP=True,
+                  eq='CP', data=None, init=False):
     # CS test config
     CS_PATH = '/Users/cathywu/Dropbox/Fa13/EE227BT/traffic-project'
     OUT_PATH = '%s/data/output-cathywu/' % CS_PATH
 
     # Test parameters
-    # alg = 'cvx_random_sampling_L1_30_replace'
+    alg = 'cvx_random_sampling_L1_30_replace'
     # alg = 'cvx_oracle'
-    alg = 'cvx_unconstrained_L1'
+    # alg = 'cvx_unconstrained_L1'
     # alg = 'cvx_L2'
     # alg = 'cvx_raw'
     # alg = 'cvx_weighted_L1'
@@ -259,44 +262,59 @@ def experiment_CS(test=None, full=False, L=True, OD=True, CP=True, LP=True,
     # alg = 'cvx_entropy'
 
     # Load test and export to .mat
-    A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0, out = \
-        load_data('%s/%s' % (c.DATA_DIR,test), full=full, OD=True, CP=True,
-                  LP=True, eq='OD', init=True)
+    init_time = time.time()
+    if data is None and test is not None:
+        fname = '%s/%s' % (c.DATA_DIR,test)
+        A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0, out = \
+            load_data(fname, full=full, L=L, OD=OD, CP=CP, LP=LP, eq=eq,
+                      init=init)
+    else:
+        A, b, N, block_sizes, x_true, nz, flow, rsort_index, x0, out = \
+            solver_input(data, full=full, L=L, OD=OD, CP=CP, LP=LP,
+                         eq=eq, init=init)
+    init_time = time.time() - init_time
+    output = out
+    output['init_time'] = init_time
+
+    if block_sizes is None or N is None:
+        output['error'] = "No EQ constraint"
+        return output
+
+    # Perturb
+    if args.noise:
+        b_true = b
+        delta = np.random.normal(scale=b*args.noise)
+        b = b + delta
+
     fname = '%s/CS_%s' % (c.DATA_DIR,test)
-    scipy.io.savemat(fname, { 'A': A, 'b': b, 'x_true': x_true, 'flow' : flow,
-                              'x0': x0, 'block_sizes': block_sizes, 'nz': nz },
+    try:
+        scipy.io.savemat(fname, { 'A': A, 'b': b, 'x_true': x_true, 'flow' : flow,
+                              'x0': x0, 'block_sizes': block_sizes },
                      oned_as='column')
+    except TypeError:
+        pprint({ 'A': A, 'b': b, 'x_true': x_true, 'flow' : flow,
+                              'x0': x0, 'block_sizes': block_sizes })
+        ipdb.set_trace()
 
     # Perform test via MATLAB
     from pymatbridge import Matlab
     mlab = Matlab()
     mlab.start()
+    duration_time = time.time()
     mlab.run_code('cvx_solver mosek;')
     mlab.run_code("addpath '~/mosek/7/toolbox/r2012a';")
     p = mlab.run_func('%s/scenario_to_output.m' % CS_PATH,
                       { 'filename' : fname, 'type' : test, 'algorithm' : alg,
                         'outpath' : OUT_PATH })
+    duration_time = time.time() - duration_time
     mlab.stop()
-    x = np.array(p['result']).squeeze()
+    x = array(p['result'])
 
-    # Results
-    logging.debug("Shape of x_hat: %s" % repr(x.shape))
-    logging.debug('A: (%s,%s)' % (A.shape))
+    _, _, output = LS_postprocess([x],x,A,b,x_true,block_sizes=block_sizes,
+                                  output=output,is_x=True)
+    output['duration'], output['iters'], output['times'] = duration_time, [0], [0]
 
-    opt_error = 0.5 * la.norm(A.dot(x_true)-b)**2
-    diff = A.dot(x) - b
-    error = 0.5 * diff.T.dot(diff)
-
-    x_diff = np.abs(x_true - x)
-    dist_from_true = np.max(x_diff)
-
-    print 'incorrect x entries: %s' % x_diff[x_diff > 1e-3].shape[0]
-    per_flow = np.sum(x_diff) / np.sum(x_true)
-    print 'percent flow allocated incorrectly: %f' % per_flow
-    print '0.5norm(Ax-b)^2: %8.5e' % error
-    print '0.5norm(Ax*-b)^2: %8.5e' % opt_error
-    print 'max|f * (x-x_true)|: %.5f\n\n\n' % \
-          (dist_from_true)
+    return output
 
 def experiment_LSQR(args, test=None, data=None, full=False, L=True, OD=True,
                     CP=True, LP=True, damp=0.0):
@@ -308,10 +326,10 @@ def experiment_LSQR(args, test=None, data=None, full=False, L=True, OD=True,
     output['init_time'] = init_time
 
     if A is None:
+        output['error'] = "Empty objective"
         return output
 
-    x_last, error, output = LS_postprocess([x0],x0,A,b,x_true,
-                                           output=output,is_x=True)
+    _, _, output = LS_postprocess([x0],x0,A,b,x_true,output=output,is_x=True)
 
     output['duration'], output['iters'], output['times'] = 0, [0], [0]
     return output
@@ -525,7 +543,7 @@ def scenario(params=None, log='INFO'):
             return {'error' : data['error']}
 
     if args.solver == 'CS':
-        output = experiment_CS(test=type, full=args.all_links, L=args.use_L,
+        output = experiment_CS(args, test=type, full=args.all_links, L=args.use_L,
                     OD=args.use_OD, CP=args.use_CP, LP=args.use_LP, data=data)
     elif args.solver == 'BI':
         output = experiment_BI(args.sparse, full=args.all_links, L=args.use_L,

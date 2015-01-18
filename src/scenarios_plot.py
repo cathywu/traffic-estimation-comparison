@@ -172,10 +172,12 @@ def plot_ls(s):
     """
     pass
 
-def plot_sensors_vs_configs_v3(s, init=False,sparse=True, stat='mean',
-                                     caption=None,error_leq=0.01,max_NLPCP=None,
-                                     model=None,solver='LS',damp=0.0,disp=True):
-    def plot1(d, title, color='b', config=[True,True,True,True], stat='mean'):
+def plot_sensors_vs_configs_v3(s, init=False, sparse=True, stat='mean',
+                               caption=None, error_leq=1, error_leq2=None,
+                               error_leq3=None, max_NLPCP=None, model=None,
+                               solver='LS', damp=0.0, disp=True):
+    def plot1(d, title, color='b', config=[True,True,True,True], stat='mean',
+              marker='o'):
         # plot nroutes vs nconstraints needed to achieve accuracy
         # color: sensor config?
         # size: actual # of sensors (including ODs)
@@ -212,7 +214,7 @@ def plot_sensors_vs_configs_v3(s, init=False,sparse=True, stat='mean',
         labels = [json.dumps(x,sort_keys=True, indent=4) for x in note]
 
         plot_scatter(nroutes,nTotalSensors,c=color,s=size,label=labels,info=info,
-                     alpha=0.2)
+                     alpha=0.2,marker=marker)
 
         plt.title(title)
         plt.xlabel('Number of routes')
@@ -230,8 +232,9 @@ def plot_sensors_vs_configs_v3(s, init=False,sparse=True, stat='mean',
     if model is not None:
         match_by.append(('model',model))
     leq = [('percent flow allocated incorrectly',error_leq)]
-    if max_NLPCP is not None:
-        leq.append(('NLPCP',max_NLPCP))
+    leq2 = [('percent flow allocated incorrectly',error_leq2)] if error_leq2 else None
+    leq3 = [('percent flow allocated incorrectly',error_leq3)] if error_leq3 else None
+    leq_NLPCP = [('NLPCP',max_NLPCP)] if max_NLPCP is not None else []
 
     sensor_configs = [(True,True,True,True), (True,True,False,False),
                       (False,False,True,True),(False,False,True,False),
@@ -245,14 +248,29 @@ def plot_sensors_vs_configs_v3(s, init=False,sparse=True, stat='mean',
     legend = []
     for (config,color,label) in zip(sensor_configs,colors,labels):
         match_by_sensor = zip(sensor_param,config)
-        d = filter(s,group_by=['nroutes','NLP'], match_by=match_by + match_by_sensor,leq=leq)
+        d = filter(s,group_by=['nroutes','NLP'],
+                   match_by=match_by + match_by_sensor, leq=leq+leq_NLPCP)
         if len(d.keys()) > 0:
             print label, len(d.keys())
-            plot1(d, title1, config=config, color=color, stat=stat)
-            plt.hold(True)
+            plot1(d, title1, config=config, color=color, stat=stat, marker='o')
             legend.append(label)
-
     plt.legend(legend)
+
+    for (config,color,label) in zip(sensor_configs,colors,labels):
+        match_by_sensor = zip(sensor_param,config)
+        if leq2 is not None:
+            d2 = filter(s, group_by=['nroutes','NLP'],leq=leq2+leq_NLPCP,
+                        match_by=match_by + match_by_sensor, geq=leq)
+            if len(d2.keys()) > 0:
+                plt.hold(True)
+                plot1(d2, title1, config=config, color=color, stat=stat, marker='^')
+        if leq2 is not None and leq3 is not None:
+            d3 = filter(s,group_by=['nroutes','NLP'], leq=leq3+leq_NLPCP, geq=leq2,
+                        match_by=match_by+match_by_sensor)
+            if len(d3.keys()) > 0:
+                plt.hold(True)
+                plot1(d3, title1, config=config, color=color, stat=stat, marker='v')
+
     fig.suptitle("%s %s" % (suptitle % (solver,model,sparse,init,stat),caption), fontsize=8)
 
     if disp:
@@ -567,7 +585,8 @@ def plot_nroutes_vs_nblocks_init_ls(s, sparse=True, stat='mean', error_leq=1,
 
 def plot_nroutes_vs_nblocks(s, init=False,sparse=True, stat='mean',
                                yaxis='blocks', caption=None,model=None,
-                               solver='LS',damp=0.0,disp=True):
+                               solver='LS',damp=0.0, disp=True, error_leq=1,
+                               error_leq2=None, error_leq3=None):
     def plot_ratio(d, title, stat='mean',yaxis='blocks'):
         nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
         if yaxis=='blocks+obj':
@@ -715,6 +734,8 @@ if __name__ == "__main__":
     sparse = False
     yaxis = 'blocks'
     error = 0.10
+    error2 = 0.30
+    error3 = 0.50
 
     # caption = """This plot compares accuracy (%% error), duration, and the number of blocks, as the number of routes considered grows (which is
     # a function of the network and nroutes parameter. To the left, we have on the yaxis the number of %s; the right plot shows the same information but displays a
@@ -760,13 +781,19 @@ if __name__ == "__main__":
     # caption = """This is basically the same plot, but we filter for experiments that are %0.2f+ accurate in route flow""" % error
     # plot_nroutes_vs_nblocks_init_ls(scenarios_ls, sparse=sparse, error_leq=error,
     #                                 caption=caption)
-    caption = """This is the first plot with LSQR results; it shows the total number of constraints for experiments with a %0.2f+ route flow accuracy, colored
-    by the sensor configuration, and sized by the number of actual sensors"""
+    caption = """[ALL] This is the first plot with LSQR results; it shows the total number of constraints for experiments with a %0.2f+ route flow accuracy,
+    colored by the sensor configuration, and sized by the number of actual sensors"""
     plot_sensors_vs_configs_v3(scenarios_v3, sparse=sparse,solver='LSQR',
-                                caption=caption,error_leq=error,max_NLPCP=100)
+                               caption=caption,max_NLPCP=100,disp=False)
+    caption = """[ACCURATE] This is the first plot with LSQR results; it shows the total number of constraints for experiments with a %0.2f+ route flow accuracy,
+    colored by the sensor configuration, and sized by the number of actual sensors"""
+    plot_sensors_vs_configs_v3(scenarios_v3, sparse=sparse,solver='LSQR',
+                                caption=caption,error_leq=error,error_leq2=error2,
+                                error_leq3=error3,max_NLPCP=100)
     caption = """Same but for LS"""
     plot_sensors_vs_configs_v3(scenarios_v2, sparse=sparse,solver='LS',
-                               caption=caption,error_leq=error,max_NLPCP=350)
+                               caption=caption,error_leq=error,error_leq2=error2,
+                               error_leq3=error3,max_NLPCP=350)
 
     # PLOT LS vs LSQ
 
