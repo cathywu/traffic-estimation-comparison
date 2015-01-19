@@ -241,8 +241,8 @@ def experiment_BI(sparse, full=False, L=True, OD=True, CP=True, LP=True, data=No
 def experiment_TA():
     pass
 
-def experiment_CS(args, test=None, full=False, L=True, OD=True, CP=True, LP=True,
-                  eq='CP', data=None, init=False):
+def experiment_CS(args, test='temp', full=False, L=True, OD=True, CP=True,
+                  LP=True, eq='CP', data=None, init=False):
     # CS test config
     CS_PATH = '/Users/cathywu/Dropbox/Fa13/EE227BT/traffic-project'
     OUT_PATH = '%s/data/output-cathywu/' % CS_PATH
@@ -520,8 +520,6 @@ def scenario(params=None, log='INFO'):
     print args
 
     if args.model == 'P':
-        type = 'small_graph_OD.mat' if args.sparse else 'small_graph_OD_dense.mat'
-
         data = generate_data_P(nrow=args.nrow, ncol=args.ncol,
                                nodroutes=args.nodroutes,
                                NB=args.NB, NL=args.NL, NLP=args.NLP,
@@ -543,7 +541,7 @@ def scenario(params=None, log='INFO'):
             return {'error' : data['error']}
 
     if args.solver == 'CS':
-        output = experiment_CS(args, test=type, full=args.all_links, L=args.use_L,
+        output = experiment_CS(args, full=args.all_links, L=args.use_L,
                     OD=args.use_OD, CP=args.use_CP, LP=args.use_LP, data=data)
     elif args.solver == 'BI':
         output = experiment_BI(args.sparse, full=args.all_links, L=args.use_L,

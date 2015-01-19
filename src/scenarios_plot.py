@@ -43,16 +43,20 @@ def filter_all_links(d):
     return False
 
 def plot_scatter(x,y,c=None,s=None,label=None,info=None,alpha=1.0,marker='o',
-                 vmin=None,vmax=None):
+                 vmin=None,vmax=None,legend=True):
     # x, y, c, s = rand(4, 100)
-    scatter(x, y, 100*s, c, alpha=alpha,marker=marker,vmin=vmin,vmax=vmax)
+    if legend:
+        scatter(x, y, 100*s, c, alpha=alpha,marker=marker,vmin=vmin,vmax=vmax)
+    else:
+        scatter(x, y, 100*s, c, alpha=alpha,marker=marker,vmin=vmin,vmax=vmax,
+                label='_nolegend_')
     #fig.savefig('pscoll.eps')
     if label is not None:
         af =  AnnoteFinder(x,y,label,info=info)
         connect('button_press_event', af)
 
 def filter(s,group_by=[],match_by=[],geq=[],leq=[]):
-    d = {}
+    d = {} if group_by is not None else []
     valid = ['nroutes','nsensors','blocks','percent flow allocated incorrectly',
              'NLPCP','use_L','use_OD','use_CP','use_LP']
     for x in s:
@@ -82,13 +86,16 @@ def filter(s,group_by=[],match_by=[],geq=[],leq=[]):
         if match == False:
             continue
         try:
-            key = frozenset([(group,get_key(x,group)) for group in group_by])
+            if group_by is not None:
+                key = frozenset([(group,get_key(x,group)) for group in group_by])
+                if key in d:
+                    d[key].append(x)
+                else:
+                    d[key] = [x]
+            else:
+                d.append(x)
         except TypeError:
             ipdb.set_trace()
-        if key in d:
-            d[key].append(x)
-        else:
-            d[key] = [x]
     return d
 
 def get_key(d,key):
@@ -100,20 +107,58 @@ def get_key(d,key):
         return _get_per_flow(d)
     elif key == 'blocks':
         return _get_blocks(d)
+    elif key == 'max_links':
+        return _get_max_links(d)
+    ## Sensor configuration/constraints retrieval
+    # CP/LP sensor configuration
     elif key == 'NCP':
-        return d['params']['NB'] + d['params']['NS'] + d['params']['NL']
+        NCP = d['params']['NB'] + d['params']['NS'] + d['params']['NL']
+        return get_key(d,'use_CP') * NCP
+    elif key == 'NLP':
+        return get_key(d,'use_LP') * d['params']['NLP']
     elif key == 'NLPCP':
-        return d['params']['NLP'] + get_key(d,'NCP')
+        return get_key(d,'NCP') + get_key(d,'NLP')
+    # Links/OD configurations/constraints
+    elif key == 'nLinks':
+        # WARNING: v2+
+        return get_key(d,'use_L') * d[key] if key in d else 0
+    elif key == 'nOD':
+        # WARNING: v2+
+        return get_key(d,'use_OD') * d[key] if key in d else 0
+    elif key == 'nLiOD':
+        return get_key(d,'nLinks') + get_key(d,'nOD')
+    # CP/LP constraints
+    elif key == 'nCP':
+        # WARNING: v2+
+        return get_key(d,'use_CP') * d[key] if key in d else 0
+    elif key == 'nLP':
+        # WARNING: v2+
+        return get_key(d,'use_LP') * d[key] if key in d else 0
     elif key == 'nLPCP':
-        return d['nLP'] + d['nCP']
-    elif key in ['nLinks','nOD','nCP','nLP','duration']:
-        # CAUTION: only works for v2+
+        return get_key(d,'nLP') + get_key(d,'nCP')
+    # Total sensors
+    elif key == 'nsensors':
+        return get_key(d,'nLinks') + get_key(d,'nOD') + get_key(d,'NLPCP')
+    # Total constraints
+    elif key == 'nconstraints':
+        return get_key(d,'nLinks') + get_key(d,'nOD') + get_key(d,'nLPCP')
+    elif key in ['duration']:
         return d[key] if key in d else 0
     elif key in ['use_L','use_OD','use_CP','use_LP']:
-        # CAUTION: only works for v2+
+        # WARNING: v2+
+        # Default for sensor toggle is True
         return d['params'][key] if key in d['params'] else True
     else:
         return d['params'][key]
+
+def _get_max_links(d):
+    p = d['params']
+    if 'nrow' in p and 'ncol' in p:
+        return 2 * (p['nrow'] * p['ncol'] * 2 + p['ncol'] + p['nrow'] - 2)
+    elif p['model'] in ['UE','SO']:
+        return 122
+    print d
+    return None
 
 def _get_blocks(d):
     if d['blocks'] is None:
@@ -130,12 +175,16 @@ def get_stats(xs,f,stat='mean'):
     return np.array([_get_stat(x,f,stat=stat) for x in xs])
 
 def _get_stat(l, f, stat='first'):
-    if stat=='first':
-        return f(l[0])
-    elif stat=='mean':
+    if stat=='mean':
         return np.mean([f(x) for x in l])
+    elif stat=='max':
+        return np.max([f(x) for x in l])
+    elif stat=='min':
+        return np.min([f(x) for x in l])
     elif stat=='median':
         return np.median([f(x) for x in l])
+    elif stat=='first':
+        return f(l[0])
     else:
         print "Error: stat %s not found" % stat
 
@@ -176,6 +225,25 @@ def plot_sensors_vs_configs_v3(s, init=False, sparse=True, stat='mean',
                                caption=None, error_leq=1, error_leq2=None,
                                error_leq3=None, max_NLPCP=None, model=None,
                                solver='LS', damp=0.0, disp=True):
+    def plot_lp(d, color='#99FF99', stat='max', marker='*'):
+        # Plot # links line, which indicates where LP sensors would be perfect
+        if d == {} or d is None:
+            return
+
+        nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
+        nroutes, idx = np.unique(nroutes, return_index=True)
+        links = get_stats(d.itervalues(), lambda x: get_key(x,'max_links'), stat=stat)[idx]
+
+        note = [{} for a in nroutes]
+        info = note
+
+        size = 2
+        labels = [json.dumps(x,sort_keys=True, indent=4) for x in note]
+
+        plot_scatter(nroutes,links,c=color,s=size,label=labels,info=info,
+                     alpha=1,marker=marker,legend=False)
+
+
     def plot1(d, title, color='b', config=[True,True,True,True], stat='mean',
               marker='o'):
         # plot nroutes vs nconstraints needed to achieve accuracy
@@ -190,10 +258,8 @@ def plot_sensors_vs_configs_v3(s, init=False, sparse=True, stat='mean',
         nODconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nOD'), stat=stat)
         nLPconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nLP'), stat=stat)
         nCPconstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nCP'), stat=stat)
-        nTotalConstraints = config[0] * nLconstraints + config[1] * nODconstraints \
-                            + config[2] * nCPconstraints + config[3] * nLPconstraints
-        nTotalSensors = config[0] * nLconstraints + config[1] * nODconstraints \
-                        + config[2] * NCP + config[3] * NLP
+        nTotalConstraints = get_stats(d.itervalues(), lambda x: get_key(x,'nconstraints'), stat=stat)
+        nTotalSensors = get_stats(d.itervalues(), lambda x: get_key(x,'nsensors'), stat=stat)
 
         duration = get_stats(d.itervalues(), lambda x: get_key(x,'duration'), stat=stat)
         perflow_wrong = get_stats(d.itervalues(), lambda x: get_key(x,'perflow'), stat=stat)
@@ -214,13 +280,11 @@ def plot_sensors_vs_configs_v3(s, init=False, sparse=True, stat='mean',
         labels = [json.dumps(x,sort_keys=True, indent=4) for x in note]
 
         plot_scatter(nroutes,nTotalSensors,c=color,s=size,label=labels,info=info,
-                     alpha=0.2,marker=marker)
+                     alpha=0.2,marker=marker,legend=False)
 
         plt.title(title)
         plt.xlabel('Number of routes')
         plt.ylabel('Number of total sensors')
-        plt.ylim(np.max([plt.ylim()[0]],0),plt.ylim()[1])
-        plt.xlim(np.max([0,plt.xlim()[0]]),plt.xlim()[1])
 
     suptitle = "Size = # of sensors [solver=%s,model=%s,sparse=%s,init=%s,stat=%s,LP=^,CP=v]"
     title1 = 'Sensor selection vs config'
@@ -236,41 +300,50 @@ def plot_sensors_vs_configs_v3(s, init=False, sparse=True, stat='mean',
     leq3 = [('percent flow allocated incorrectly',error_leq3)] if error_leq3 else None
     leq_NLPCP = [('NLPCP',max_NLPCP)] if max_NLPCP is not None else []
 
+    sensor_param = ['use_L','use_OD','use_CP','use_LP']
+    start = 1
     sensor_configs = [(True,True,True,True), (True,True,False,False),
                       (False,False,True,True),(False,False,True,False),
                       (False,False,False,True),(True,False,False,False),
-                      (False,True,False,False)]
-    sensor_param = ['use_L','use_OD','use_CP','use_LP']
-    colors = ['b','g','r','c','m','y','k']
-    labels = ['All','L/OD','CP/LP','CP','LP','L','OD']
+                      (False,True,False,False)][start:]
+    colors = ['b','g','r','c','m','y','k'][start:]
+    labels = ['All','L/OD','CP/LP','CP','LP','L','OD'][start:]
 
     fig = plt.figure()
     legend = []
     for (config,color,label) in zip(sensor_configs,colors,labels):
         match_by_sensor = zip(sensor_param,config)
-        d = filter(s,group_by=['nroutes','NLP'],
+        d = filter(s,group_by=['nroutes','NLP','NCP','nOD','nLinks'],
                    match_by=match_by + match_by_sensor, leq=leq+leq_NLPCP)
         if len(d.keys()) > 0:
             print label, len(d.keys())
             plot1(d, title1, config=config, color=color, stat=stat, marker='o')
             legend.append(label)
+            plot_lp(d)
     plt.legend(legend)
 
     for (config,color,label) in zip(sensor_configs,colors,labels):
         match_by_sensor = zip(sensor_param,config)
+        d2,d3 = None,None
         if leq2 is not None:
-            d2 = filter(s, group_by=['nroutes','NLP'],leq=leq2+leq_NLPCP,
-                        match_by=match_by + match_by_sensor, geq=leq)
+            d2 = filter(s, group_by=['nroutes','NLP','NCP','nOD','nLinks'], geq=leq,
+                        leq=leq2+leq_NLPCP, match_by=match_by+match_by_sensor)
             if len(d2.keys()) > 0:
                 plt.hold(True)
-                plot1(d2, title1, config=config, color=color, stat=stat, marker='^')
+                plot1(d2, title1, config=config, color=color, stat=stat,
+                      marker='^')
+                plot_lp(d2)
         if leq2 is not None and leq3 is not None:
-            d3 = filter(s,group_by=['nroutes','NLP'], leq=leq3+leq_NLPCP, geq=leq2,
-                        match_by=match_by+match_by_sensor)
+            d3 = filter(s,group_by=['nroutes','NLP','NCP','nOD','nLinks'], geq=leq2,
+                        leq=leq3+leq_NLPCP, match_by=match_by+match_by_sensor)
             if len(d3.keys()) > 0:
                 plt.hold(True)
-                plot1(d3, title1, config=config, color=color, stat=stat, marker='v')
+                plot1(d3, title1, config=config, color=color, stat=stat,
+                      marker='v')
+                plot_lp(d3)
 
+    ax = plt.gca()
+    ax.autoscale(True)
     fig.suptitle("%s %s" % (suptitle % (solver,model,sparse,init,stat),caption), fontsize=8)
 
     if disp:
@@ -682,7 +755,7 @@ def plot_nroutes_vs_nblocks(s, init=False,sparse=True, stat='mean',
     if disp:
         show()
 
-if __name__ == "__main__":
+def load_results():
     import config as c
     files = os.listdir(c.RESULT_DIR)
     curr_input = None
@@ -729,6 +802,10 @@ if __name__ == "__main__":
                 if filter_v3(d):
                     scenarios_v3.append(d)
 
+    return scenarios, scenarios_all_links, scenarios_v2, scenarios_v3
+
+if __name__ == "__main__":
+
     # Plot configuration
     init = False
     sparse = False
@@ -736,6 +813,8 @@ if __name__ == "__main__":
     error = 0.10
     error2 = 0.30
     error3 = 0.50
+
+    scenarios, scenarios_all_links, scenarios_v2, scenarios_v3 = load_results()
 
     # caption = """This plot compares accuracy (%% error), duration, and the number of blocks, as the number of routes considered grows (which is
     # a function of the network and nroutes parameter. To the left, we have on the yaxis the number of %s; the right plot shows the same information but displays a
@@ -790,10 +869,10 @@ if __name__ == "__main__":
     plot_sensors_vs_configs_v3(scenarios_v3, sparse=sparse,solver='LSQR',
                                 caption=caption,error_leq=error,error_leq2=error2,
                                 error_leq3=error3,max_NLPCP=100)
-    caption = """Same but for LS"""
-    plot_sensors_vs_configs_v3(scenarios_v2, sparse=sparse,solver='LS',
-                               caption=caption,error_leq=error,error_leq2=error2,
-                               error_leq3=error3,max_NLPCP=350)
+    # caption = """Same but for LS"""
+    # plot_sensors_vs_configs_v3(scenarios_v2, sparse=sparse,solver='LS',
+    #                            caption=caption,error_leq=error,error_leq2=error2,
+    #                            error_leq3=error3,max_NLPCP=350)
 
     # PLOT LS vs LSQ
 

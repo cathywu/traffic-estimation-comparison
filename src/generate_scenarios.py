@@ -4,10 +4,16 @@ import numpy as np
 import random
 from random import shuffle
 
-def new_s():
-    return {'solver': 'LS', 'model': 'P', 'sparse': False, 'noise': 0.0,
+def new_s(s=None):
+    base_s = {'solver': 'LS', 'model': 'P', 'sparse': False, 'noise': 0.0,
             'all_links': False, 'use_L': True, 'use_OD': True, 'use_CP': True,
             'use_LP': True, 'NLP': 0, 'NB': 0, 'NS': 0, 'NL': 0}
+    if s is None:
+        return base_s
+    for (k,v) in base_s.iteritems():
+        if k not in s:
+            s[k] = v
+    return s
 
 def chunk(l, n):
     """ Yield successive n-sized chunks from l.
@@ -254,6 +260,21 @@ def test_least_squares(outfile='scenarios_least_squares.txt',n=100):
 def test_noise():
     fname = 'scenarios_noise.txt'
     pass
+
+def test_LSQR_LP_large(outfile='scenarios_LSQR_LP_large.txt',damp=0.0):
+    scenarios = []
+    scenarios_LSQR = test_LSQR_LP(outfile=None,damp=damp)
+
+    for s in scenarios_LSQR:
+        if s['nrow'] > 5 and s['ncol'] > 3:
+            scenarios.append(s)
+        elif s['nrow'] > 3 and s['ncol'] > 5:
+            scenarios.append(s)
+
+    if outfile is not None:
+        dump(scenarios,outfile)
+
+    return scenarios
 
 def test_LSQR_LP(outfile='scenarios_LSQR_LP.%s.txt',hash=0,damp=0.0):
     scenarios = []
@@ -643,4 +664,5 @@ if __name__ == "__main__":
     # test_LSQR_CP()
     # test_LSQR_CP(hash=1)
     # test_LSQR_CP(hash=2)
+    test_LSQR_LP_large()
     pass
