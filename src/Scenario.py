@@ -241,8 +241,8 @@ def experiment_BI(sparse, full=False, L=True, OD=True, CP=True, LP=True, data=No
 def experiment_TA():
     pass
 
-def experiment_CS(args, test='temp', full=False, L=True, OD=True, CP=True,
-                  LP=True, eq='CP', data=None, init=False):
+def experiment_CS(args, test='temp', full=False, L=True, OD=True, CP=True, LP=True,
+                  eq='CP', data=None, init=False):
     # CS test config
     CS_PATH = '/Users/cathywu/Dropbox/Fa13/EE227BT/traffic-project'
     OUT_PATH = '%s/data/output-cathywu/' % CS_PATH
@@ -289,7 +289,7 @@ def experiment_CS(args, test='temp', full=False, L=True, OD=True, CP=True,
     fname = '%s/CS_%s' % (c.DATA_DIR,test)
     try:
         scipy.io.savemat(fname, { 'A': A, 'b': b, 'x_true': x_true, 'flow' : flow,
-                              'x0': x0, 'block_sizes': block_sizes },
+                              'x0': x0, 'block_sizes': block_sizes},
                      oned_as='column')
     except TypeError:
         pprint({ 'A': A, 'b': b, 'x_true': x_true, 'flow' : flow,
@@ -520,6 +520,8 @@ def scenario(params=None, log='INFO'):
     print args
 
     if args.model == 'P':
+        type = 'small_graph_OD.mat' if args.sparse else 'small_graph_OD_dense.mat'
+
         data = generate_data_P(nrow=args.nrow, ncol=args.ncol,
                                nodroutes=args.nodroutes,
                                NB=args.NB, NL=args.NL, NLP=args.NLP,
