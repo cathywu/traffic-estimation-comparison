@@ -87,6 +87,12 @@ def test_from_good_LSQR(result_files,outfile='scenarios_fromLSQR_%s.%d.txt',
 
     for x in scenarios_LSQR:
         s = new_s(s=x['params'])
+        if s['use_CP'] == False and s['use_OD'] == False:
+            continue
+        else:
+            types = int(s['use_L'])+int(s['use_OD'])+int(s['use_CP'])+int(s['use_LP'])
+            if types < 2:
+                continue
         if solver == 'LS':
             s['solver'] = solver
             s['method'] = 'BB'

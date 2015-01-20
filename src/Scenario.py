@@ -542,19 +542,20 @@ def scenario(params=None, log='INFO'):
         if 'error' in data:
             return {'error' : data['error']}
 
+    eq = 'CP' if args.use_CP else 'OD'
     if args.solver == 'CS':
         output = experiment_CS(args, full=args.all_links, L=args.use_L,
-                    OD=args.use_OD, CP=args.use_CP, LP=args.use_LP, data=data)
+                    OD=args.use_OD, CP=args.use_CP, LP=args.use_LP, eq=eq, data=data)
     elif args.solver == 'BI':
         output = experiment_BI(args.sparse, full=args.all_links, L=args.use_L,
                     OD=args.use_OD, CP=args.use_CP, LP=args.use_LP, data=data)
     elif args.solver == 'LS':
         output = experiment_LS(args, full=args.all_links, init=args.init,
                     L=args.use_L, OD=args.use_OD, CP=args.use_CP,
-                    LP=args.use_LP, data=data)
+                    LP=args.use_LP, eq=eq, data=data)
     elif args.solver == 'LSQR':
         output = experiment_LSQR(args, full=args.all_links, L=args.use_L,
-                    OD=args.use_OD, CP=args.use_CP, LP=args.use_LP, data=data)
+                    OD=args.use_OD, CP=args.use_CP, LP=args.use_LP, eq=eq, data=data)
 
     if args.output == True:
         pprint(output)
