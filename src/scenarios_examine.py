@@ -73,8 +73,8 @@ def test_remainders(scenario_files, result_files):
 
                     f.write("%s\n" % json.dumps(d))
 
-def test_from_good_LSQR(result_files,outfile='scenarios_fromLSQR_%s.%d.txt',
-                        solver='LS',N=4):
+def test_from_good_LSQR(result_files,outfile='scenarios_fromLSQR_%s.%d.%d.txt',
+                        solver='LS',N=1,suffix=0):
     # Tally up scenario files
     scenarios = []
 
@@ -84,6 +84,16 @@ def test_from_good_LSQR(result_files,outfile='scenarios_fromLSQR_%s.%d.txt',
     geq = [('percent flow allocated incorrectly', 1e-5)]
     scenarios_LSQR = filter(scenarios_all,group_by=None,match_by=match_by,
                             leq=leq,geq=geq)
+    scenarios_BI = filter(scenarios_all,group_by=None,match_by=[('solver','BI')])
+    scenarios_LS = filter(scenarios_all,group_by=None,match_by=[('solver','LS')])
+    scenarios_CS = filter(scenarios_all,group_by=None,match_by=[('solver','CS')])
+    d_LS, d_CS, d_BI = {}, {}, {}
+    for s in scenarios_LS:
+        d_LS[frozenset(s['params'].iteritems())] = 1
+    for s in scenarios_CS:
+        d_CS[frozenset(s['params'].iteritems())] = 1
+    for s in scenarios_BI:
+        d_BI[frozenset(s['params'].iteritems())] = 1
 
     for x in scenarios_LSQR:
         s = new_s(s=x['params'])
@@ -97,12 +107,16 @@ def test_from_good_LSQR(result_files,outfile='scenarios_fromLSQR_%s.%d.txt',
             s['solver'] = solver
             s['method'] = 'BB'
             s['init'] = True
-            scenarios.append(s.copy())
+            if frozenset(s.iteritems()) not in d_LS:
+                scenarios.append(s.copy())
             s['init'] = False
-            scenarios.append(s.copy())
+            if frozenset(s.iteritems()) not in d_LS:
+                scenarios.append(s.copy())
         if solver in ['BI','CS']:
             s['solver'] = solver
-            scenarios.append(s.copy())
+            if (solver == 'BI' and frozenset(s.iteritems()) not in d_BI) or \
+                    (solver == 'CS' and frozenset(s.iteritems()) not in d_CS):
+                scenarios.append(s.copy())
 
     for s in scenarios:
         check_scenario(s)
@@ -113,7 +127,7 @@ def test_from_good_LSQR(result_files,outfile='scenarios_fromLSQR_%s.%d.txt',
         size = len(scenarios)
         chunks = chunk(scenarios, size/N)
         for i,chunkk in enumerate(chunks):
-            dump(chunkk,outfile % (solver,i))
+            dump(chunkk,outfile % (solver,suffix,i))
 
     return scenarios
 
@@ -130,13 +144,6 @@ if __name__ == "__main__":
             scenario_files.remove(f)
 
     # test_remainders(scenario_files, result_files)
-    test_from_good_LSQR(result_files,solver='LS')
-    test_from_good_LSQR(result_files,solver='BI')
-    test_from_good_LSQR(result_files,solver='CS')
-
-
-
-
-
-
-
+    test_from_good_LSQR(result_files,suffix=2,solver='LS')
+    test_from_good_LSQR(result_files,suffix=2,solver='BI')
+    test_from_good_LSQR(result_files,suffix=2,solver='CS')

@@ -149,7 +149,10 @@ def get_key(d,key):
         # Default for sensor toggle is True
         return d['params'][key] if key in d['params'] else True
     else:
-        return d['params'][key]
+        try:
+            return d['params'][key]
+        except:
+            ipdb.set_trace()
 
 def _get_max_links(d):
     p = d['params']
@@ -163,6 +166,8 @@ def _get_max_links(d):
 def _get_blocks(d):
     if d['blocks'] is None:
         return 0
+    if type(d['blocks']) == int:
+        return d['blocks']
     return d['blocks'][0]
 
 def _get_per_flow(d):
@@ -183,8 +188,12 @@ def _get_stat(l, f, stat='first'):
         return np.min([f(x) for x in l])
     elif stat=='median':
         return np.median([f(x) for x in l])
+    elif stat=='all':
+        return [f(x) for x in l]
     elif stat=='first':
         return f(l[0])
+    elif stat=='last':
+        return f(l[-1])
     else:
         print "Error: stat %s not found" % stat
 
@@ -220,6 +229,124 @@ def plot_ls(s):
     :return:
     """
     pass
+
+def plot_solver_comparison(s, sparse=True, stat='mean',
+                           caption=None, error_leq=1, error_leq2=None,
+                           error_leq3=None, max_NLPCP=None, model='P',
+                           damp=0.0, disp=True,use_L=None,use_OD=None,use_CP=None,
+                           use_LP=None):
+
+    def plot1(d, title, color_map=None, stat='mean', error_leq=1, error_leq2=None,
+              error_leq3=None):
+        # plot nroutes vs nconstraints needed to achieve accuracy
+        # color: sensor config?
+        # size: actual # of sensors (including ODs)
+        import random
+
+        nrows, ncols, colors, labels, infos, markers = [], [], [], [], [], []
+        for (k,v) in d.iteritems():
+            dd = filter(v,group_by=['solver'])
+            solvers = get_stats(dd.itervalues(), lambda x: get_key(x,'solver'), stat='first')
+            perflow_wrong = get_stats(dd.itervalues(), lambda x: get_key(x,'perflow'), stat=stat)
+            if solvers.size > 1:
+                best_perflow, best_solver = \
+                    min(zip(perflow_wrong,solvers),key=lambda x: x[0])
+                if best_perflow < error_leq:
+                    marker = 'o'
+                elif error_leq2 is not None and best_perflow < error_leq2:
+                    marker = '^'
+                elif error_leq3 is not None and best_perflow < error_leq3:
+                    marker = 'v'
+                nrow = get_stats(dd.itervalues(), lambda x: get_key(x,'nrow'), stat=stat)[0]
+                ncol = get_stats(dd.itervalues(), lambda x: get_key(x,'ncol'), stat=stat)[0]
+
+                nroutes = get_stats(dd.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
+                sparse = get_stats(dd.itervalues(), lambda x: get_key(x,'sparse'), stat='first')
+                blocks = get_stats(dd.itervalues(), lambda x: get_key(x,'blocks'), stat=stat)
+                NLP = get_stats(dd.itervalues(), lambda x: get_key(x,'NLP'), stat=stat)
+                NCP = get_stats(dd.itervalues(), lambda x: get_key(x,'NCP'), stat=stat)
+                nLconstraints = get_stats(dd.itervalues(), lambda x: get_key(x,'nLinks'), stat=stat)
+                nODconstraints = get_stats(dd.itervalues(), lambda x: get_key(x,'nOD'), stat=stat)
+                nLPconstraints = get_stats(dd.itervalues(), lambda x: get_key(x,'nLP'), stat=stat)
+                nCPconstraints = get_stats(dd.itervalues(), lambda x: get_key(x,'nCP'), stat=stat)
+                nTotalConstraints = get_stats(dd.itervalues(), lambda x: get_key(x,'nconstraints'), stat=stat)
+                nTotalSensors = get_stats(dd.itervalues(), lambda x: get_key(x,'nsensors'), stat=stat)
+                duration = get_stats(dd.itervalues(), lambda x: get_key(x,'duration'), stat=stat)
+                note = [{'nL constraints': a, 'nOD constraints': b,
+                         'nLP constraints': c, 'nCP constraints': e, 'NLP': f, 'NCP': g,
+                         'blocks' : h, 'duration' : "{:.5f}".format(i),
+                         'perflow wrong' : "{:.5f}".format(j), 'total constraints': k,
+                         'total sensors': l, 'nroutes':"%s" % (m),
+                         } for (a,b,c,e,f,g,h,i,j,k,l,m) in zip(nLconstraints,
+                            nODconstraints,nLPconstraints,nCPconstraints,NLP,
+                            NCP,blocks,duration,perflow_wrong,nTotalConstraints,
+                            nTotalSensors,nroutes)]
+                info = dd.values()[0]
+
+                # max_size = np.max(nTotalSensors)
+                size = 2 # 40/max_size * nTotalSensors
+                label = json.dumps(note[0],sort_keys=True, indent=4)
+                nrows.append(nrow+random.random()-0.5)
+                ncols.append(ncol+random.random()-0.5)
+                colors.append(color_map[best_solver])
+                labels.append(label)
+                infos.append(info)
+                markers.append(marker)
+
+        nrows = np.array(nrows)
+        ncols = np.array(ncols)
+        colors = np.array(colors)
+        if model == 'P':
+            # CAUTION plotting nroutes vs accuracy will be weird because
+            # LSQR considers all routes, whereas the other methods consider
+            # an abridged set based on the EQ constraint
+            for m in ['o','^','v']:
+                idx = np.array([i for (i,x) in enumerate(markers) if x==m])
+                if idx.size == 0:
+                    continue
+                curr_labels = [labels[i] for i in idx]
+                curr_info = [infos[i] for i in idx]
+                plot_scatter(nrows[idx],ncols[idx],c=colors[idx],s=size,
+                             label=curr_labels,info=curr_info,
+                             alpha=0.2,marker=m)
+
+
+        plt.title(title)
+        plt.xlabel('Number of routes')
+        plt.ylabel('Number of total sensors')
+
+    suptitle = "[model=%s,sparse=%s,stat=%s,Top=o,Mid=^,Low=v,size=fixed,use_L=%s,use_OD=%s,use_CP=%s,use_LP=%s]"
+    title1 = 'Comparison of solvers'
+
+    group_by = ['NCP','NLP']
+    match_by = [('model',model),('sparse',sparse)]
+    group_by.append('use_L') if use_L is None else match_by.append(('use_L',use_L))
+    group_by.append('use_OD') if use_OD is None else match_by.append(('use_OD',use_OD))
+    group_by.append('use_CP') if use_CP is None else match_by.append(('use_CP',use_CP))
+    group_by.append('use_LP') if use_LP is None else match_by.append(('use_LP',use_LP))
+    if model == 'P':
+        group_by.extend(['nrow','ncol'])
+
+    leq_NLPCP = [('NLPCP',max_NLPCP)] if max_NLPCP is not None else []
+
+    # colors = ['b','g','r','c','m','y','k']
+    color_map = { 'LSQR': 'b', 'LS': 'g', 'CS': 'r', 'BI': 'c' }
+
+    fig = plt.figure()
+    legend = []
+    d = filter(s,group_by=group_by, match_by=match_by, leq=leq_NLPCP)
+    if len(d.keys()) > 0:
+        plot1(d, title1, stat=stat, color_map=color_map, error_leq=error_leq,
+              error_leq2=error_leq2, error_leq3=error_leq3)
+    plt.legend(legend)
+
+    ax = plt.gca()
+    ax.autoscale(True)
+    fig.suptitle("%s %s" % (suptitle % (model,sparse,stat,use_L,use_OD,use_CP,
+                                        use_LP),caption), fontsize=8)
+
+    if disp:
+        show()
 
 def plot_sensors_vs_configs_v3(s, init=False, sparse=True, stat='mean',
                                caption=None, error_leq=1, error_leq2=None,
@@ -657,9 +784,9 @@ def plot_nroutes_vs_nblocks_init_ls(s, sparse=True, stat='mean', error_leq=1,
         show()
 
 def plot_nroutes_vs_nblocks(s, init=False,sparse=True, stat='mean',
-                               yaxis='blocks', caption=None,model=None,
-                               solver='LS',damp=0.0, disp=True, error_leq=1,
-                               error_leq2=None, error_leq3=None):
+                            yaxis='blocks', caption=None,model=None,
+                            solver='LS',damp=0.0, disp=True, error_leq=1,
+                            error_leq2=None, error_leq3=None):
     def plot_ratio(d, title, stat='mean',yaxis='blocks'):
         nroutes = get_stats(d.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
         if yaxis=='blocks+obj':
@@ -713,7 +840,7 @@ def plot_nroutes_vs_nblocks(s, init=False,sparse=True, stat='mean',
         labels = [json.dumps(x,sort_keys=True, indent=4) for x in note]
 
         plot_scatter(nroutes,blocks,c=colors,s=size,label=labels,info=info,
-                    alpha=0.2)
+                     alpha=0.2)
 
         cb = plt.colorbar()
         cb.set_alpha(1)
@@ -769,7 +896,7 @@ def load_results():
         filename = "%s/%s" % (c.RESULT_DIR,file)
         if os.path.isdir(filename):
             continue
-        print file
+        print '.',
         with open(filename) as out:
             for line in out:
                 if line[0] != '{':
@@ -816,50 +943,50 @@ if __name__ == "__main__":
 
     scenarios, scenarios_all_links, scenarios_v2, scenarios_v3 = load_results()
 
-    # caption = """This plot compares accuracy (%% error), duration, and the number of blocks, as the number of routes considered grows (which is
-    # a function of the network and nroutes parameter. To the left, we have on the yaxis the number of %s; the right plot shows the same information but displays a
-    # ratio of the %s over the number of routes instead.""" % (yaxis, yaxis)
-    # plot_nroutes_vs_nblocks(scenarios, init=init, sparse=sparse,
-    #                            yaxis=yaxis, caption=caption, solver='LS', model='P')
-    # caption = """This plot is the same as the previous, but displays results for ONLY the LS/UE experiments"""
-    # plot_nroutes_vs_nblocks(scenarios, init=init, sparse=sparse,
-    #                            yaxis=yaxis, caption=caption, solver='LS', model='UE')
-    # caption = """This plot is the same as the previous, but displays results for ONLY the LS/SO experiments"""
-    # plot_nroutes_vs_nblocks(scenarios, init=init, sparse=sparse,
-    #                            yaxis=yaxis, caption=caption, solver='LS', model='SO')
-    # # FIXME all_links does nothing for P networks
-    # caption = """This plot is also the same, but displays results for only experiments flagged "all_links", which unforunately only makes a difference for
-    # the UE/SO experiments."""
-    # plot_nroutes_vs_nblocks(scenarios_all_links, init=init, sparse=sparse,
-    #                            yaxis=yaxis, caption=caption)
-    # caption = """This plot first filters LS/P experiments that get %0.2f+ route flow accuracy, then looks at the number of selected sensors (LP on the yaxis,
-    # CP encoded in color). Unfortunately, this doesn't give a sense of how much information is from OD pairs, links, and also how much information is
-    # provided by the LP/CP sensors in aggregate""" % error
-    # plot_nroutes_vs_sensors(scenarios, init=init, sparse=sparse,
-    #                              caption=caption,error_leq=error,solver='LS',model='P')
-    # caption = """This plot is the same as the previous but better (but with less data for now) because we have also recorded the number of constraints that
-    # come from the various sensors. CAUTION: it is the number of resulting constraints, NOT the number of sensors of each type, that is displayed."""
-    # plot_nroutes_vs_sensors_v2(scenarios_v2, init=False, sparse=sparse,
-    #                              caption=caption,error_leq=error,solver='LS',model='P',disp=False)
-    # plot_nroutes_vs_sensors_v2(scenarios_v3, init=False, sparse=sparse,
-    #                            caption=caption,error_leq=error,solver='LSQR',model='P')
-    # # FIXME I'm running more experiments in the empty space, check back in a bit
-    # caption = """For LS experiments that perform well, this plot shows the makeup of LP/CP sensors"""
-    # plot_sensors_vs_constraints_v2(scenarios_v2, init=False, sparse=sparse,
-    #                                  caption=caption,error_leq=error,max_NLPCP=350,
-    #                                  solver='LS',disp=False)
-    # plot_sensors_vs_constraints_v2(scenarios_v2, init=False, sparse=sparse,
-    #                                    caption=caption,error_leq=error,max_NLPCP=350,
-    #                                    solver='LSQR')
-    # ############
-    # caption = """Now we start to look at if initializing the LS solver with a guess based off of the equality constraint yields any performance improvement.
-    # The answer looks like yes with regards to accuracy but no with regards to runtime. I think this is bad news."""
-    # plot_nroutes_vs_nblocks_init_ls(scenarios_ls, sparse=sparse,
-    #                                 caption=caption)
-    # ############
-    # caption = """This is basically the same plot, but we filter for experiments that are %0.2f+ accurate in route flow""" % error
-    # plot_nroutes_vs_nblocks_init_ls(scenarios_ls, sparse=sparse, error_leq=error,
-    #                                 caption=caption)
+    caption = """This plot compares accuracy (%% error), duration, and the number of blocks, as the number of routes considered grows (which is
+    a function of the network and nroutes parameter. To the left, we have on the yaxis the number of %s; the right plot shows the same information but displays a
+    ratio of the %s over the number of routes instead.""" % (yaxis, yaxis)
+    plot_nroutes_vs_nblocks(scenarios, init=init, sparse=sparse,
+                               yaxis=yaxis, caption=caption, solver='LS', model='P')
+    caption = """This plot is the same as the previous, but displays results for ONLY the LS/UE experiments"""
+    plot_nroutes_vs_nblocks(scenarios, init=init, sparse=sparse,
+                               yaxis=yaxis, caption=caption, solver='LS', model='UE')
+    caption = """This plot is the same as the previous, but displays results for ONLY the LS/SO experiments"""
+    plot_nroutes_vs_nblocks(scenarios, init=init, sparse=sparse,
+                               yaxis=yaxis, caption=caption, solver='LS', model='SO')
+    # FIXME all_links does nothing for P networks
+    caption = """This plot is also the same, but displays results for only experiments flagged "all_links", which unforunately only makes a difference for
+    the UE/SO experiments."""
+    plot_nroutes_vs_nblocks(scenarios_all_links, init=init, sparse=sparse,
+                               yaxis=yaxis, caption=caption)
+    caption = """This plot first filters LS/P experiments that get %0.2f+ route flow accuracy, then looks at the number of selected sensors (LP on the yaxis,
+    CP encoded in color). Unfortunately, this doesn't give a sense of how much information is from OD pairs, links, and also how much information is
+    provided by the LP/CP sensors in aggregate""" % error
+    plot_nroutes_vs_sensors(scenarios, init=init, sparse=sparse,
+                                 caption=caption,error_leq=error,solver='LS',model='P')
+    caption = """This plot is the same as the previous but better (but with less data for now) because we have also recorded the number of constraints that
+    come from the various sensors. CAUTION: it is the number of resulting constraints, NOT the number of sensors of each type, that is displayed."""
+    plot_nroutes_vs_sensors_v2(scenarios_v2, init=False, sparse=sparse,
+                                 caption=caption,error_leq=error,solver='LS',model='P',disp=False)
+    plot_nroutes_vs_sensors_v2(scenarios_v3, init=False, sparse=sparse,
+                               caption=caption,error_leq=error,solver='LSQR',model='P')
+    # FIXME I'm running more experiments in the empty space, check back in a bit
+    caption = """For LS experiments that perform well, this plot shows the makeup of LP/CP sensors"""
+    plot_sensors_vs_constraints_v2(scenarios_v2, init=False, sparse=sparse,
+                                     caption=caption,error_leq=error,max_NLPCP=350,
+                                     solver='LS',disp=False)
+    plot_sensors_vs_constraints_v2(scenarios_v2, init=False, sparse=sparse,
+                                       caption=caption,error_leq=error,max_NLPCP=350,
+                                       solver='LSQR')
+    ############
+    caption = """Now we start to look at if initializing the LS solver with a guess based off of the equality constraint yields any performance improvement.
+    The answer looks like yes with regards to accuracy but no with regards to runtime. I think this is bad news."""
+    plot_nroutes_vs_nblocks_init_ls(scenarios, sparse=sparse,
+                                    caption=caption)
+    ############
+    caption = """This is basically the same plot, but we filter for experiments that are %0.2f+ accurate in route flow""" % error
+    plot_nroutes_vs_nblocks_init_ls(scenarios, sparse=sparse, error_leq=error,
+                                    caption=caption)
     caption = """[ALL] This is the first plot with LSQR results; it shows the total number of constraints for experiments with a %0.2f+ route flow accuracy,
     colored by the sensor configuration, and sized by the number of actual sensors"""
     plot_sensors_vs_configs_v3(scenarios_v3, sparse=sparse,solver='LSQR',
@@ -869,10 +996,34 @@ if __name__ == "__main__":
     plot_sensors_vs_configs_v3(scenarios_v3, sparse=sparse,solver='LSQR',
                                 caption=caption,error_leq=error,error_leq2=error2,
                                 error_leq3=error3,max_NLPCP=100)
-    # caption = """Same but for LS"""
-    # plot_sensors_vs_configs_v3(scenarios_v2, sparse=sparse,solver='LS',
-    #                            caption=caption,error_leq=error,error_leq2=error2,
-    #                            error_leq3=error3,max_NLPCP=350)
+    caption = """Same but for LS"""
+    plot_sensors_vs_configs_v3(scenarios_v2, sparse=sparse,solver='LS',
+                               caption=caption,error_leq=error,error_leq2=error2,
+                               error_leq3=error3,max_NLPCP=350)
+
+    caption = """[ACCURATE] Comparison of LSQR vs LS vs BI vs CS"""
+    plot_solver_comparison(scenarios_v3, sparse=False, caption=caption,
+                           error_leq=error, error_leq2=error2, model='P',
+                           error_leq3=error3, max_NLPCP=100, disp=False)
+    plot_solver_comparison(scenarios_v3, sparse=False, caption=caption,
+                           error_leq=error, error_leq2=error2, model='P',
+                           error_leq3=error3, max_NLPCP=100, use_L=True,
+                           use_OD=True, use_CP=True, use_LP=True, disp=False)
+    plot_solver_comparison(scenarios_v3, sparse=False, caption=caption,
+                           error_leq=error, error_leq2=error2, model='P',
+                           error_leq3=error3, max_NLPCP=100, use_L=False,
+                           use_OD=False, use_CP=True, use_LP=True, disp=False)
+    plot_solver_comparison(scenarios_v3, sparse=True, caption=caption,
+                           error_leq=error, error_leq2=error2, model='P',
+                           error_leq3=error3, max_NLPCP=100, disp=False)
+    plot_solver_comparison(scenarios_v3, sparse=True, caption=caption,
+                           error_leq=error, error_leq2=error2, model='P',
+                           error_leq3=error3, max_NLPCP=100, use_L=True,
+                           use_OD=True, use_CP=True, use_LP=True, disp=False)
+    plot_solver_comparison(scenarios_v3, sparse=True, caption=caption,
+                           error_leq=error, error_leq2=error2, model='P',
+                           error_leq3=error3, max_NLPCP=100, use_L=False,
+                           use_OD=False, use_CP=True, use_LP=True)
 
     # PLOT LS vs LSQ
 
