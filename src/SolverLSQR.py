@@ -1,10 +1,9 @@
 import time
-import logging
 
-import numpy as np
-
+import config as c
 from Solver import Solver
-from python.util import solver_input, load_data
+from BSC_NNLS.python.util import solver_input
+from synthetic_traffic.synth_utils import array
 
 # FIXME temporary hack
 from scenario_utils import LS_postprocess
@@ -47,5 +46,5 @@ class SolverLSQR(Solver):
 
 if __name__ == "__main__":
     import unittest
-    from tests.test_solver_lsqr import TestSolverLSQR
+    from comparison.tests.test_solver_lsqr import TestSolverLSQR
     unittest.main()
