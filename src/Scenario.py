@@ -3,13 +3,14 @@ import time
 
 from pprint import pprint
 import logging
+import random
 
 import config as c
 
 # Dependencies for data generation
-from networks.EquilibriumNetwork import EquilibriumNetwork
-from networks.GridNetwork import GridNetwork
-from sensors.SensorConfiguration import SensorConfiguration
+from synthetic_traffic.networks.EquilibriumNetwork import EquilibriumNetwork
+from synthetic_traffic.networks.GridNetwork import GridNetwork
+from synthetic_traffic.sensors.SensorConfiguration import SensorConfiguration
 
 # Import solvers
 from SolverLS import SolverLS
@@ -18,11 +19,11 @@ from SolverCS import SolverCS
 from SolverLSQR import SolverLSQR
 
 # Dependencies for Bayesian inference
-from grid_model import load_model, create_model
-from grid_simulation import MCMC
+from bayesian.grid_model import load_model, create_model
+from bayesian.grid_simulation import MCMC
 
 # Dependencies for least squares
-from python.util import load_data, solver_input
+from BSC_NNLS.python.util import load_data, solver_input
 
 # Dependencies for compressed sensing
 
@@ -30,27 +31,101 @@ from python.util import load_data, solver_input
 import scipy.io
 import numpy as np
 
-from isttt2014_experiments import synthetic_data
-from linkpath import LinkPath
-import path_solver
-import Waypoints as WP
+# from isttt2014_experiments import synthetic_data
+# from linkpath import LinkPath
+# import path_solver
+# import Waypoints as WP
 
-from synth_utils import to_sp, array
+from synthetic_traffic.synth_utils import to_sp, array, deprecated
+import synthetic_traffic.networks.grid_networks.static_matrix as static_matrix
+
 from scenario_utils import parser, update_args
-from synth_utils import deprecated
 
 class Scenario:
-    def __init__(self, TN, S, solver):
-        self.TN = TN
-        self.S = S
-        self.solver = solver
+    def __init__(self, TN=None, S=None, solver=None, args=None, myseed=None):
+        # Save seed for reproducibility
+        if myseed is None:
+            myseed = random.randint(0,4294967295)
+        np.random.seed(myseed)
+        random.seed(myseed)
+        self.myseed = myseed
+
+        self.args = args if args is not None else self._new_args()
+        self.TN = TN if TN is not None else self._new_traffic_network()
+        self.S = S if S is not None else self._new_sensor_configuration()
+        self.solver = solver if solver is not None else self._new_solver()
+
         self.output = None
 
+    def _new_args(self):
+        p = parser()
+        args = p.parse_args()
+        return args
+
+    def _new_traffic_network(self):
+        if self.args.model == 'P':
+            type = 'small_graph_OD.mat' if self.args.sparse \
+                else 'small_graph_OD_dense.mat'
+
+            TN = GridNetwork(nrow=self.args.nrow, ncol=self.args.ncol,
+                             nodroutes=self.args.nodroutes, myseed=self.myseed)
+            if type == 'small_graph_OD.mat':
+                TN.sample_OD_flow(o_flow=1.0,nnz_oroutes=10)
+            elif type == 'small_graph_OD_dense.mat':
+                TN.sample_OD_flow(o_flow=1.0,sparsity=0.1)
+        else:
+            SO = True if self.args.model == 'SO' else False
+
+            TN = EquilibriumNetwork(SO=SO,path='los_angeles_data_2.mat')
+        return TN
+
+    def _new_sensor_configuration(self):
+        return SensorConfiguration(num_link=np.inf, num_OD=np.inf,
+                                   num_cellpath_NB=self.args.NB,
+                                   num_cellpath_NL=self.args.NL,
+                                   num_cellpath_NS=self.args.NS,
+                                   num_linkpath=self.args.NLP)
+
+    def _new_solver(self):
+        eq = 'CP' if self.args.use_CP else 'OD'
+        if self.args.solver == 'CS':
+            solver = SolverCS(self.args, full=self.args.all_links,
+                                   L=self.args.use_L, OD=self.args.use_OD,
+                                   CP=self.args.use_CP, LP=self.args.use_LP, eq=eq)
+        elif self.args.solver == 'BI':
+            solver = SolverBI(self.args.sparse, full=self.args.all_links,
+                                   L=self.args.use_L, OD=self.args.use_OD,
+                                   CP=self.args.use_CP, LP=self.args.use_LP)
+        elif self.args.solver == 'LS':
+            solver = SolverLS(self.args, full=self.args.all_links,
+                                   init=self.args.init, L=self.args.use_L,
+                                   OD=self.args.use_OD, CP=self.args.use_CP,
+                                   LP=self.args.use_LP, eq=eq)
+        elif self.args.solver == 'LSQR':
+            solver = SolverLSQR(self.args, full=self.args.all_links,
+                                     L=self.args.use_L, OD=self.args.use_OD,
+                                     CP=self.args.use_CP, LP=self.args.use_LP)
+        return solver
+
     def run(self):
-        self.output = self.solver.solve()
+        # Generate data output
+        self.S.sample_sensors(self.TN)
+        data = self.S.export_matrices(self.TN)
+        if 'error' in data:
+            return {'error' : data['error']}
+
+        self.solver.setup(data)
+        self.solver.solve()
+        self.solver.analyze()
+
+        if self.args.output == True:
+            pprint(self.solver.output)
+
+        self.output = self.solver.output
 
 # Data generation
 # -------------------------------------
+@deprecated
 def generate_data_P(nrow=5, ncol=6, nodroutes=4, nnz_oroutes=10,
                     NB=60, NS=20, NL=15, NLP=98, type='small_graph_OD.mat'):
     """
@@ -63,6 +138,7 @@ def generate_data_P(nrow=5, ncol=6, nodroutes=4, nnz_oroutes=10,
     return data
     # FIXME return data
 
+@deprecated
 def generate_data_UE(data=None, export=False, SO=False, demand=3, N=30,
                      withODs=False, NLP=122):
     """
@@ -291,7 +367,10 @@ def experiment_LS(args, test=None, data=None, full=True, L=True, OD=True,
     output['iters'], output['times'] = list(iters), list(times)
     return output
 
+@deprecated
 def scenario(params=None, log='INFO'):
+    myseed = 9374293
+
     # use argparse object as default template
     p = parser()
     args = p.parse_args()
@@ -305,23 +384,34 @@ def scenario(params=None, log='INFO'):
     if args.model == 'P':
         type = 'small_graph_OD.mat' if args.sparse else 'small_graph_OD_dense.mat'
 
-        data = generate_data_P(nrow=args.nrow, ncol=args.ncol,
-                               nodroutes=args.nodroutes,
-                               NB=args.NB, NL=args.NL, NLP=args.NLP,
-                               type=type)
+        TN = GridNetwork(nrow=args.nrow, ncol=args.ncol,nodroutes=args.nodroutes,
+                         myseed=myseed)
+        if type == 'small_graph_OD.mat':
+            TN.sample_OD_flow(o_flow=1.0,nnz_oroutes=10)
+        elif type == 'small_graph_OD_dense.mat':
+            TN.sample_OD_flow(o_flow=1.0,sparsity=0.1)
+
+        S = SensorConfiguration(num_link=np.inf, num_OD=np.inf,
+                                num_cellpath_NB=args.NB,
+                                num_cellpath_NL=args.NL,
+                                num_cellpath_NS=args.NS,
+                                num_linkpath=args.NLP)
+        S.sample_sensors(TN)
+        data = S.export_matrices(TN)
+
         if 'error' in data:
             return {'error' : data['error']}
     else:
         SO = True if args.model == 'SO' else False
-        # N0, N1, scale, regions, res, margin
-        config = (args.NB, args.NL, 0.2, [((3.5, 0.5, 6.5, 3.0), args.NS)], (6,3), 2.0)
-        # data[0] = (20, 40, 0.2, [((3.5, 0.5, 6.5, 3.0), 20)], (12,6), 2.0)
-        # data[1] = (10, 20, 0.2, [((3.5, 0.5, 6.5, 3.0), 10)], (10,5), 2.0)
-        # data[2] = (5, 10, 0.2, [((3.5, 0.5, 6.5, 3.0), 5)], (6,3), 2.0)
-        # data[3] = (3, 5, 0.2, [((3.5, 0.5, 6.5, 3.0), 2)], (4,2), 2.0)
-        # data[4] = (1, 3, 0.2, [((3.5, 0.5, 6.5, 3.0), 1)], (2,2), 2.0)
-        # TODO trials?
-        data = generate_data_UE(data=config, SO=SO, NLP=args.NLP)
+
+        TN = EquilibriumNetwork(SO=SO,path='los_angeles_data_2.mat')
+        S = SensorConfiguration(num_link=np.inf, num_OD=np.inf,
+                                num_cellpath_NB=args.NB,
+                                num_cellpath_NL=args.NL,
+                                num_cellpath_NS=args.NS,
+                                num_linkpath=args.NLP)
+        S.sample_sensors(TN)
+        data = S.export_matrices(TN)
         if 'error' in data:
             return {'error' : data['error']}
 
@@ -349,7 +439,19 @@ def scenario(params=None, log='INFO'):
     return sol.output
 
 if __name__ == "__main__":
-    output = scenario()
+    # output = scenario()
+    myseed = 9374293
+
+    # use argparse object as default template
+    p = parser()
+    args = p.parse_args()
+    # if params is not None:
+    #     args = update_args(args, params)
+    if args.log in c.ACCEPTED_LOG_LEVELS:
+        logging.basicConfig(level=eval('logging.'+args.log))
+
+    scen = Scenario(args=args)
+    scen.run()
 
     ## CS experiment
     ## TODO: invoke matlab?

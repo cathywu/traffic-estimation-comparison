@@ -1,3 +1,4 @@
+import ipdb
 import argparse
 import logging
 
@@ -5,9 +6,10 @@ import numpy as np
 import numpy.linalg as la
 import matplotlib.pyplot as plt
 
-from python import util
-from python.c_extensions.simplex_projection import simplex_projection
-from python import BB, LBFGS, DORE, solvers
+import config as c
+from BSC_NNLS.python import util
+from BSC_NNLS.python.c_extensions.simplex_projection import simplex_projection
+from BSC_NNLS.python import BB, LBFGS, DORE, solvers
 
 def parser():
     parser = argparse.ArgumentParser()
@@ -66,6 +68,7 @@ def parser():
                         help='P only: Number of rows in grid network')
     parser.add_argument('--nodroutes',dest='nodroutes',type=int,default=15,
                         help='P only: Number of routes per OD pair')
+
     return parser
 
 def update_args(args, params):
@@ -168,7 +171,7 @@ def LS_postprocess(states, x0, A, b, x_true, scaling=None, block_sizes=None,
     if output is None:
         output = {}
     d = len(states)
-    if not is_x:
+    if not is_x and N.size > 0:
         x_hat = N.dot(np.array(states).T) + np.tile(x0,(d,1)).T
     else:
         x_hat = np.array(states).T

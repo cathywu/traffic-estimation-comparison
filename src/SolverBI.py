@@ -9,8 +9,7 @@ from grid_simulation import MCMC
 from scenario_utils import LS_postprocess
 
 class SolverBI(Solver):
-    def __init__(self, sparse=0, full=False, L=True, OD=True, CP=True, LP=True,
-                 data=None):
+    def __init__(self, sparse=0, full=False, L=True, OD=True, CP=True, LP=True):
         Solver.__init__(self)
 
         self.sparse = sparse
@@ -19,11 +18,10 @@ class SolverBI(Solver):
         self.OD = OD
         self.CP = CP
         self.LP = LP
-        self.data = data
 
-    def setup(self):
+    def setup(self, data):
         self.AA, self.bb_obs, self.EQ, self.x_true, self.scaling, out = \
-            solver_input(self.data, full=self.full, L=self.L, OD=self.OD,
+            solver_input(data, full=self.full, L=self.L, OD=self.OD,
                          CP=self.CP, LP=self.LP, eq='CP', EQ_elim=False)
         self.output = out
 
@@ -61,3 +59,8 @@ class SolverBI(Solver):
                                                self.bb_obs, self.x_true,
                                                output=self.output, is_x=True)
         self.output['blocks'] = self.EQ.shape[0] if self.EQ is not None else None
+
+if __name__ == "__main__":
+    import unittest
+    from tests.test_solver_bi import TestSolverBI
+    unittest.main()

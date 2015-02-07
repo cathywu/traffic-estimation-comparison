@@ -11,7 +11,7 @@ from scenario_utils import LS_postprocess
 
 class SolverLSQR(Solver):
     def __init__(self, args, test=None, data=None, full=True, L=True, OD=True,
-                  CP=True, LP=True, eq='CP', init=True):
+                  CP=True, LP=True, eq='CP', init=True, damp=0):
         Solver.__init__(self)
 
         self.args = args
@@ -23,10 +23,10 @@ class SolverLSQR(Solver):
         self.OD = OD
         self.CP = CP
         self.LP = LP
-        self.data = data
+        self.damp = damp
 
-    def setup(self):
-        pass
+    def setup(self,data):
+        self.data = data
 
     def solve(self):
         init_time = time.time()
@@ -44,3 +44,8 @@ class SolverLSQR(Solver):
         x_last, error, self.output = LS_postprocess([self.x0],self.x0,self.A,self.b,
                                                self.x_true,output=self.output,is_x=True)
         self.output['iters'], self.output['times'] = [0], [0]
+
+if __name__ == "__main__":
+    import unittest
+    from tests.test_solver_lsqr import TestSolverLSQR
+    unittest.main()

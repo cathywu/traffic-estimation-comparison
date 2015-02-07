@@ -5,7 +5,7 @@ class Solver:
         self.output = None
 
     @abstractmethod
-    def setup(self):
+    def setup(self, data):
         return NotImplemented
 
     @abstractmethod

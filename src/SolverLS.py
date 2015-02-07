@@ -4,10 +4,12 @@ import logging
 import numpy as np
 
 from Solver import Solver
-from python.util import solver_input, load_data
 
 # FIXME temporary hack
-from scenario_utils import LS_postprocess, LS_solve
+try:
+    from scenario_utils import LS_postprocess, LS_solve
+except ImportError:
+    import config as c
 
 class SolverLS(Solver):
     def __init__(self, args, test=None, data=None, full=True, L=True, OD=True,
@@ -23,21 +25,21 @@ class SolverLS(Solver):
         self.OD = OD
         self.CP = CP
         self.LP = LP
-        self.data = data
 
-    def setup(self):
+    def setup(self, data):
         init_time = time.time()
-        if self.data is None and self.test is not None:
-            import config as c
+        if data is None and self.test is not None:
+            from BSC_NNLS.python.util import load_data
             fname = '%s/%s' % (c.DATA_DIR,self.test)
             self.A, self.b, self.N, self.block_sizes, self.x_true, self.nz,\
             self.flow, self.rsort_index, self.x0, out = \
                 load_data(fname, full=self.full, L=self.L, OD=self.OD,
                           CP=self.CP, LP=self.LP, eq=self.eq, init=self.init)
         else:
+            from BSC_NNLS.python.util import solver_input
             self.A, self.b, self.N, self.block_sizes, self.x_true, self.nz, \
             self.flow, self.rsort_index, self.x0, out = \
-                solver_input(self.data, full=self.full, L=self.L, OD=self.OD,
+                solver_input(data, full=self.full, L=self.L, OD=self.OD,
                           CP=self.CP, LP=self.LP, eq=self.eq, init=self.init)
         init_time = time.time() - init_time
         self.output = out
@@ -66,3 +68,10 @@ class SolverLS(Solver):
                                                self.x_true,scaling=self.flow,
                                                block_sizes=self.block_sizes,N=self.N,
                                                output=self.output)
+
+if __name__ == "__main__":
+    import unittest
+    import config
+    import ipdb
+    from comparison.tests.test_solver_ls import TestSolverLS
+    unittest.main()

@@ -6,12 +6,15 @@ import numpy as np
 import scipy
 
 from Solver import Solver
-from python.util import solver_input, load_data
-from synth_utils import array
+try:
+    from synth_utils import array
+except ImportError:
+    import config as c
+from scenario_utils import LS_postprocess
 
 class SolverCS(Solver):
     def __init__(self, args, test='temp', full=False, L=True, OD=True, CP=True,
-                 LP=True, eq='CP', data=None, init=False,
+                 LP=True, eq='CP', init=False,
                  method='cvx_random_sampling_L1_30_replace'):
         Solver.__init__(self)
 
@@ -24,7 +27,6 @@ class SolverCS(Solver):
         self.OD = OD
         self.CP = CP
         self.LP = LP
-        self.data = data
 
         # CS test config
         CS_PATH = '/Users/cathywu/Dropbox/Fa13/EE227BT/traffic-project'
@@ -44,19 +46,21 @@ class SolverCS(Solver):
         # alg = 'cvx_block_descent_L_infty'
         # alg = 'cvx_entropy'
 
-    def setup(self):
+    def setup(self, data):
+        import config as c
         init_time = time.time()
-        if self.data is None and self.test is not None:
-            import config as c
+        if data is None and self.test is not None:
             fname = '%s/%s' % (c.DATA_DIR,self.test)
+            from python.util import solver_input, load_data
             self.A, self.b, self.N, self.block_sizes, self.x_true, self.nz,\
             self.flow, self.rsort_index, self.x0, out = \
                 load_data(fname, full=self.full, L=self.L, OD=self.OD,
                           CP=self.CP, LP=self.LP, eq=self.eq, init=self.init)
         else:
+            from python.util import solver_input, load_data
             self.A, self.b, self.N, self.block_sizes, self.x_true, self.nz, \
             self.flow, self.rsort_index, self.x0, out = \
-                solver_input(self.data, full=self.full, L=self.L, OD=self.OD,
+                solver_input(data, full=self.full, L=self.L, OD=self.OD,
                           CP=self.CP, LP=self.LP, eq=self.eq, init=self.init)
         init_time = time.time() - init_time
         self.output = out
@@ -110,3 +114,8 @@ class SolverCS(Solver):
                                                self.x_true,scaling=self.flow,
                                                block_sizes=self.block_sizes,N=self.N,
                                                output=self.output)
+
+if __name__ == "__main__":
+    import unittest
+    from tests.test_solver_cs import TestSolverCS
+    unittest.main()
