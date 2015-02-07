@@ -5,11 +5,10 @@ from pprint import pprint
 import numpy as np
 import scipy
 
+import config as c
 from Solver import Solver
-try:
-    from synth_utils import array
-except ImportError:
-    import config as c
+
+from synthetic_traffic.synth_utils import array
 from scenario_utils import LS_postprocess
 
 class SolverCS(Solver):
@@ -30,7 +29,7 @@ class SolverCS(Solver):
 
         # CS test config
         self.CS_PATH = '/Users/cathywu/Dropbox/Fa13/EE227BT/traffic-project'
-        OUT_PATH = '%s/data/output-cathywu/' % self.CS_PATH
+        self.OUT_PATH = '%s/' % c.DATA_DIR
 
         # Test parameters
         self.method = 'cvx_random_sampling_L1_30_replace'
@@ -50,11 +49,11 @@ class SolverCS(Solver):
         import config as c
         init_time = time.time()
         if data is None and self.test is not None:
-            fname = '%s/%s' % (c.DATA_DIR,self.test)
+            self.fname = '%s/%s' % (c.DATA_DIR,self.test)
             from python.util import solver_input, load_data
             self.A, self.b, self.N, self.block_sizes, self.x_true, self.nz,\
             self.flow, self.rsort_index, self.x0, out = \
-                load_data(fname, full=self.full, L=self.L, OD=self.OD,
+                load_data(self.fname, full=self.full, L=self.L, OD=self.OD,
                           CP=self.CP, LP=self.LP, eq=self.eq, init=self.init)
         else:
             from python.util import solver_input, load_data
@@ -77,9 +76,9 @@ class SolverCS(Solver):
             logging.debug("Blocks: %s" % self.block_sizes.shape)
         # z0 = np.zeros(N.shape[1])
 
-        fname = '%s/CS_%s' % (c.DATA_DIR,self.test)
+        self.fname = '%s/CS_%s' % (c.DATA_DIR,self.test)
         try:
-            scipy.io.savemat(fname, { 'A': self.A, 'b': self.b,
+            scipy.io.savemat(self.fname, { 'A': self.A, 'b': self.b,
                                       'x_true': self.x_true, 'flow' : self.flow,
                                       'x0': self.x0, 'block_sizes': self.block_sizes},
                              oned_as='column')
@@ -101,7 +100,8 @@ class SolverCS(Solver):
     def solve(self):
         duration_time = time.time()
         p = self.mlab.run_func('%s/scenario_to_output.m' % self.CS_PATH,
-                          { 'filename' : self.fname, 'type' : self.test, 'algorithm' : self.method,
+                          { 'filename' : self.fname, 'type' : self.test,
+                            'algorithm' : self.method,
                             'outpath' : self.OUT_PATH })
         duration_time = time.time() - duration_time
         self.mlab.stop()
@@ -112,8 +112,8 @@ class SolverCS(Solver):
     def analyze(self):
         x_last, error, self.output = LS_postprocess([self.x],self.x,self.A,self.b,
                                                self.x_true,scaling=self.flow,
-                                               block_sizes=self.block_sizes,N=self.N,
-                                               output=self.output)
+                                               block_sizes=self.block_sizes,
+                                               N=self.N,output=self.output,is_x=True)
 
 if __name__ == "__main__":
     import unittest
