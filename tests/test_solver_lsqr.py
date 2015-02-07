@@ -1,6 +1,10 @@
 import unittest
-from src.scenario_utils import parser
-from src.Scenario import Scenario
+try:
+    from comparison.src.scenario_utils import parser
+    from comparison.src.Scenario import Scenario
+except ImportError:
+    from src.scenario_utils import parser
+    from src.Scenario import Scenario
 
 __author__ = 'cathywu'
 

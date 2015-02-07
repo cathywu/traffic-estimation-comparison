@@ -29,8 +29,8 @@ class SolverCS(Solver):
         self.LP = LP
 
         # CS test config
-        CS_PATH = '/Users/cathywu/Dropbox/Fa13/EE227BT/traffic-project'
-        OUT_PATH = '%s/data/output-cathywu/' % CS_PATH
+        self.CS_PATH = '/Users/cathywu/Dropbox/Fa13/EE227BT/traffic-project'
+        OUT_PATH = '%s/data/output-cathywu/' % self.CS_PATH
 
         # Test parameters
         self.method = 'cvx_random_sampling_L1_30_replace'
@@ -117,5 +117,5 @@ class SolverCS(Solver):
 
 if __name__ == "__main__":
     import unittest
-    from tests.test_solver_cs import TestSolverCS
+    from comparison.tests.test_solver_cs import TestSolverCS
     unittest.main()

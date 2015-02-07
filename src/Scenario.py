@@ -123,60 +123,6 @@ class Scenario:
 
         self.output = self.solver.output
 
-# Data generation
-# -------------------------------------
-@deprecated
-def generate_data_P(nrow=5, ncol=6, nodroutes=4, nnz_oroutes=10,
-                    NB=60, NS=20, NL=15, NLP=98, type='small_graph_OD.mat'):
-    """
-    Generate and export probabilistic matrices
-    """
-    prefix = '%s/' % c.DATA_DIR
-    data = static_matrix.export_matrices(prefix, nrow, ncol, nodroutes=nodroutes,
-                                  nnz_oroutes=nnz_oroutes, NB=NB, NS=NS, NL=NL,
-                                  NLP=NLP, export=False, type=type)
-    return data
-    # FIXME return data
-
-@deprecated
-def generate_data_UE(data=None, export=False, SO=False, demand=3, N=30,
-                     withODs=False, NLP=122):
-    """
-    Generate and export UE matrices
-    """
-    # FIXME copy mat file to local directory?
-    path='hadoop/los_angeles_data_2.mat'
-    g, x_true, l, path_wps, wp_trajs, obs, wp = synthetic_data(data, SO, demand, N,
-                                                           path=path,fast=False)
-    x_true = array(x_true)
-    obs=obs[0]
-    A_full = path_solver.linkpath_incidence(g)
-    A = to_sp(A_full[obs,:])
-    A_full = to_sp(A_full)
-    U,f = WP.simplex(g, wp_trajs, withODs)
-    T,d = path_solver.simplex(g)
-
-    data = {'A_full': A_full, 'b_full': A_full.dot(x_true),
-            'A': A, 'b': A.dot(x_true), 'x_true': x_true,
-            'T': to_sp(T), 'd': array(d),
-            'U': to_sp(U), 'f': array(f) }
-
-    if NLP is not None:
-        lp = LinkPath(g,x_true,N=NLP)
-        lp.update_lp_flows()
-        V,g = lp.simplex_lp()
-        data['V'], data['g'] = V, g
-
-    # Export
-    if export:
-        if not SO:
-            fname = '%s/UE_graph.mat' % c.DATA_DIR
-        else:
-            fname = '%s/SO_graph.mat' % c.DATA_DIR
-        scipy.io.savemat(fname, data, oned_as='column')
-
-    return data
-
 # Experimentation helper functions
 # -------------------------------------
 @deprecated

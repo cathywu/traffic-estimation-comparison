@@ -72,6 +72,5 @@ class SolverLS(Solver):
 if __name__ == "__main__":
     import unittest
     import config
-    import ipdb
     from comparison.tests.test_solver_ls import TestSolverLS
     unittest.main()
