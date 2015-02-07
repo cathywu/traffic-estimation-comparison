@@ -1,9 +1,11 @@
 import numpy as np
 
+
+import config as c
 from Solver import Solver
-from python.util import solver_input
-from grid_model import create_model
-from grid_simulation import MCMC
+from BSC_NNLS.python.util import solver_input
+from bayesian.grid_model import create_model
+from bayesian.grid_simulation import MCMC
 
 # FIXME temporary hack
 from scenario_utils import LS_postprocess
@@ -62,5 +64,5 @@ class SolverBI(Solver):
 
 if __name__ == "__main__":
     import unittest
-    from tests.test_solver_bi import TestSolverBI
+    from comparison.tests.test_solver_bi import TestSolverBI
     unittest.main()
