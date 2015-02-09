@@ -105,6 +105,8 @@ class Scenario:
             solver = SolverLSQR(self.args, full=self.args.all_links,
                                      L=self.args.use_L, OD=self.args.use_OD,
                                      CP=self.args.use_CP, LP=self.args.use_LP)
+        else:
+            return NotImplemented
         return solver
 
     def run(self):
