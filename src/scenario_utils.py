@@ -173,6 +173,8 @@ def LS_postprocess(states, x0, A, b, x_true, scaling=None, block_sizes=None,
     if output is None:
         output = {}
     d = len(states)
+
+    # Convert back to x (from z) if necessary
     if not is_x and N.size > 0:
         x_hat = N.dot(np.array(states).T) + np.tile(x0,(d,1)).T
     else:
@@ -180,12 +182,9 @@ def LS_postprocess(states, x0, A, b, x_true, scaling=None, block_sizes=None,
     x_last = x_hat[:,-1]
     n = x_hat.shape[1]
 
-    logging.debug("Shape of x0: %s" % repr(x0.shape))
-    logging.debug("Shape of x_hat: %s" % repr(x_hat.shape))
-    logging.debug('A: %s' % repr(A.shape))
-    if block_sizes is not None:
-        logging.debug('blocks: %s' % repr(block_sizes.shape))
+    # Record sizes
     output['AA'] = A.shape
+    output['x_hat'] = x_hat.shape
     output['blocks'] = block_sizes.shape if block_sizes is not None else None
 
     # Objective error, i.e. 0.5||Ax-b||_2^2
@@ -194,10 +193,7 @@ def LS_postprocess(states, x0, A, b, x_true, scaling=None, block_sizes=None,
     diff = A.dot(x_hat) - np.tile(b,(d,1)).T
     error = 0.5 * np.diag(diff.T.dot(diff))
     output['0.5norm(Ax-b)^2'], output['0.5norm(Ax_init-b)^2'] = error, starting_error
-    logging.debug('0.5norm(Ax-b)^2: %8.5e\n0.5norm(Ax_init-b)^2: %8.5e' % \
-                  (error[-1], starting_error))
     output['0.5norm(Ax*-b)^2'] = opt_error
-    logging.debug('0.5norm(Ax*-b)^2: %8.5e' % opt_error)
 
     # Route flow error, i.e ||x-x*||_1
     x_true_block = np.tile(x_true,(n,1))
@@ -209,23 +205,18 @@ def LS_postprocess(states, x0, A, b, x_true, scaling=None, block_sizes=None,
 
     # most incorrect entry (route flow)
     dist_from_true = np.max(x_diff_scaled,axis=1)
-    logging.debug('max|f * (x-x_true)|: %.5f' % dist_from_true[-1])
     output['max|f * (x-x_true)|'] = dist_from_true
 
     # num incorrect entries
     wrong = np.bincount(np.where(x_diff > 1e-3)[0])
     output['incorrect x entries'] = wrong
-    logging.debug('incorrect x entries: %s' % wrong[-1] if wrong.size > 0 else 'NA')
 
     # % route flow error
     per_flow = np.sum(np.abs(x_diff_scaled), axis=1) / np.sum(x_true_scaled, axis=1)
     output['percent flow allocated incorrectly'] = per_flow
-    logging.debug('percent flow allocated incorrectly: %f' % per_flow[-1] if \
-                      per_flow.size > 0 else 'NA')
 
     # initial route flow error
     start_dist_from_true = np.max(scaling * np.abs(x_true-x0))
-    logging.debug('max|f * (x_init-x_true)|: %.5f' % start_dist_from_true)
     output['max|f * (x_init-x_true)|'] = start_dist_from_true
 
     return x_last, error, output
