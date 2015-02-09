@@ -166,6 +166,8 @@ def LS_solve(A,b,x0,N,block_sizes,args):
 
 def LS_postprocess(states, x0, A, b, x_true, scaling=None, block_sizes=None,
                    output=None, N=None, is_x=False):
+    if x_true is None:
+        return [], [], output
     if scaling is None:
         scaling = np.ones(x_true.shape)
     if output is None:
