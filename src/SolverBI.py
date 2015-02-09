@@ -1,6 +1,5 @@
 import numpy as np
 
-
 import config as c
 from Solver import Solver
 from BSC_NNLS.python.util import solver_input

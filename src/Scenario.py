@@ -114,7 +114,9 @@ class Scenario:
         if 'error' in data:
             return {'error' : data['error']}
 
-        self.solver.setup(data)
+        self.data = data
+
+        self.solver.setup(self.data)
         self.solver.solve()
         self.solver.analyze()
 
