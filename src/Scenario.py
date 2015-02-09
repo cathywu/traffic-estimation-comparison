@@ -1,9 +1,10 @@
 import ipdb
 import time
-
-from pprint import pprint
 import logging
 import random
+from pprint import pprint
+
+import numpy as np
 
 import config as c
 
@@ -17,27 +18,6 @@ from SolverLS import SolverLS
 from SolverBI import SolverBI
 from SolverCS import SolverCS
 from SolverLSQR import SolverLSQR
-
-# Dependencies for Bayesian inference
-from bayesian.grid_model import load_model, create_model
-from bayesian.grid_simulation import MCMC
-
-# Dependencies for least squares
-from BSC_NNLS.python.util import load_data, solver_input
-
-# Dependencies for compressed sensing
-
-# Dependencies for traffic assignment
-import scipy.io
-import numpy as np
-
-# from isttt2014_experiments import synthetic_data
-# from linkpath import LinkPath
-# import path_solver
-# import Waypoints as WP
-
-from synthetic_traffic.synth_utils import to_sp, array, deprecated
-import synthetic_traffic.networks.grid_networks.static_matrix as static_matrix
 
 from scenario_utils import parser, update_args
 
@@ -142,18 +122,6 @@ if __name__ == "__main__":
     scen = Scenario(args=args)
     scen.run()
 
-    ## CS experiment
-    ## TODO: invoke matlab?
-    # experiment_CS(test)
-
-    ## TA experiment
-    ## TODO: invoke matlab or cvxopt?
-    # delaytype='Polynomial'
-    # if delaytype == 'Polynomial': theta = matrix([0.0, 0.0, 0.0, 0.15, 0.0, 0.0])
-    # if delaytype == 'Hyperbolic': theta = (3.5, 3.0)
-    # g = los_angeles(theta, delaytype, path=path)[3]
-
-    ## Comparison plot
 
 
 
