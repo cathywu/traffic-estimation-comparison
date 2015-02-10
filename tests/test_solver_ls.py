@@ -64,6 +64,7 @@ class TestSolverLS(unittest.TestCase):
         self.assertTrue(True)
 
     def test_p5(self):
+        # No equality constraint
         self.args.model = 'P'
         self.args.nrow = 5
         self.args.ncol = 2
