@@ -6,12 +6,10 @@ from matplotlib.pyplot import figure, show
 import numpy as np
 from numpy.random import rand
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-from matplotlib.patches import Rectangle
-from matplotlib.text import Text
 from pylab import connect, scatter, plot
 from AnnoteFinder import AnnoteFinder
-from Scenario import to_np
+import config as c
+from synthetic_traffic.synth_utils import to_np
 
 def filter_valid(d):
     if 'error' in d:

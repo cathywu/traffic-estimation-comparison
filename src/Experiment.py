@@ -44,7 +44,6 @@ class Experiment:
             filename = "%s/%s" % (self.scenario_dir,sf)
             if os.path.isdir(filename):
                 continue
-            print '.',
             with open(filename) as f:
                 s = pickle.load(f)
                 key = (s.fname_tn, s.fname_sc, s.fname_solver)
@@ -111,7 +110,7 @@ if __name__ == "__main__":
     scan_interval = 100
     sample_attempts = 100
     job_timeout = 600
-    njobs = 10
+    njobs = 1000
 
     e = Experiment(c.TN_DIR,c.SC_DIR,c.SOLVER_DIR,c.SCENARIO_DIR_NEW,
                    scan_interval=scan_interval,
