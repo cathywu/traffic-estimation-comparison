@@ -12,12 +12,11 @@ from synthetic_traffic.synth_utils import array
 from scenario_utils import LS_postprocess
 
 class SolverCS(Solver):
-    def __init__(self, args, test='temp', full=False, L=True, OD=True, CP=True,
-                 LP=True, eq='CP', init=False,
+    def __init__(self, test='temp', full=False, L=True, OD=True, CP=True,
+                 LP=True, eq='CP', init=False, noise=0,
                  method='cvx_random_sampling_L1_30_replace'):
         Solver.__init__(self)
 
-        self.args = args
         self.test = test
         self.eq = eq
         self.init = init
@@ -26,6 +25,7 @@ class SolverCS(Solver):
         self.OD = OD
         self.CP = CP
         self.LP = LP
+        self.noise = noise
 
         # CS test config
         self.CS_PATH = '/Users/cathywu/Dropbox/Fa13/EE227BT/traffic-project'
@@ -67,9 +67,9 @@ class SolverCS(Solver):
 
         # x0 = np.array(util.block_e(block_sizes - 1, block_sizes))
 
-        if self.args.noise:
+        if self.noise:
             b_true = self.b
-            delta = np.random.normal(scale=self.b*self.args.noise)
+            delta = np.random.normal(scale=self.b*self.noise)
             self.b = self.b + delta
 
         if self.block_sizes is not None:

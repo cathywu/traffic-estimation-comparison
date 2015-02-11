@@ -9,14 +9,12 @@ from scipy.sparse.linalg import lsqr
 from scenario_utils import LS_postprocess
 
 class SolverLSQR(Solver):
-    def __init__(self, args, test=None, data=None, full=True, L=True, OD=True,
-                  CP=True, LP=True, eq='CP', init=True, damp=0):
+    def __init__(self, test=None, data=None, full=True, L=True, OD=True,
+                  CP=True, LP=True, eq='CP', damp=0):
         Solver.__init__(self)
 
-        self.args = args
         self.test = test
         self.eq = eq
-        self.init = init
         self.full = full
         self.L = L
         self.OD = OD

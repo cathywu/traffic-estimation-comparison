@@ -12,11 +12,10 @@ except ImportError:
     import config as c
 
 class SolverLS(Solver):
-    def __init__(self, args, test=None, data=None, full=True, L=True, OD=True,
-                  CP=True, LP=True, eq='CP', init=True):
+    def __init__(self, test=None, data=None, full=True, L=True, OD=True,
+                  CP=True, LP=True, eq='CP', init=True, noise=0, method='BB'):
         Solver.__init__(self)
 
-        self.args = args
         self.test = test
         self.eq = eq
         self.init = init
@@ -24,7 +23,9 @@ class SolverLS(Solver):
         self.L = L
         self.OD = OD
         self.CP = CP
-        self.LP = LP
+        self.LP = L
+        self.noise = noise
+        self.method = method
 
     def setup(self, data):
         init_time = time.time()
@@ -47,9 +48,9 @@ class SolverLS(Solver):
 
         # x0 = np.array(util.block_e(block_sizes - 1, block_sizes))
 
-        if self.args.noise:
+        if self.noise:
             b_true = self.b
-            delta = np.random.normal(scale=self.b*self.args.noise)
+            delta = np.random.normal(scale=self.b*self.noise)
             self.b = self.b + delta
 
         if self.block_sizes is not None:
@@ -61,7 +62,7 @@ class SolverLS(Solver):
             self.iters, self.times, self.states = [0],[0],[self.x0]
         else:
             self.iters, self.times, self.states = LS_solve(self.A,self.b,self.x0,self.N,
-                                            self.block_sizes,self.args)
+                                            self.block_sizes,self.method)
 
     def analyze(self):
         x_last, error, self.output = LS_postprocess(self.states,self.x0,self.A,self.b,

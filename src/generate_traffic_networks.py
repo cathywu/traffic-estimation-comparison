@@ -1,15 +1,11 @@
 
-import pickle
 import time
-from random import randint
 
 import config as c
 from synthetic_traffic.networks.GridNetwork import GridNetwork
 from synthetic_traffic.networks.EquilibriumNetwork import EquilibriumNetwork
 
-def save(fname, TN):
-    with open(fname, 'w') as f:
-        pickle.dump(TN, f)
+from scenario_utils import save
 
 def generate_grid_networks(nrows, ncols, nodroutes, times=1, myseed=None):
     for i in range(times):
@@ -18,10 +14,7 @@ def generate_grid_networks(nrows, ncols, nodroutes, times=1, myseed=None):
                 for nodroute in nodroutes:
                     TN = GridNetwork(ncol=ncol,nrow=nrow,nodroutes=nodroute,
                                      myseed=myseed)
-                    t = int(time.time())
-                    r = randint(1e5,999999)
-                    fname = "%s/TN_Grid_%s_%s.pkl" % (c.TN_DIR,t,r)
-                    save(fname, TN)
+                    save(TN, prefix="%s/TN_Grid" % c.TN_DIR)
 
 def generate_equilibrium_networks(SOs=(False),path=None):
     for SO in SOs:

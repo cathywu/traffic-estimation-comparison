@@ -1,16 +1,10 @@
 
-import pickle
-import time
-
 import numpy as np
-from random import randint
 
 import config as c
 from synthetic_traffic.sensors.SensorConfiguration import SensorConfiguration
 
-def save(fname, TN):
-    with open(fname, 'w') as f:
-        pickle.dump(TN, f)
+from scenario_utils import save
 
 def generate_sensor_configurations(num_links, num_ODs, num_cellpath_NBs,
                                    num_cellpath_NLs, num_cellpath_NSs,
@@ -28,10 +22,7 @@ def generate_sensor_configurations(num_links, num_ODs, num_cellpath_NBs,
                                                num_cellpath_NL=num_cellpath_NL,
                                                num_cellpath_NS=num_cellpath_NS,
                                                num_linkpath=num_linkpath)
-                                t = int(time.time())
-                                r = randint(1e5,999999)
-                                fname = "%s/SC_%s_%s.pkl" % (c.SC_DIR,t,r)
-                                save(fname, SC)
+                                save(SC, prefix="%s/SC" % c.SC_DIR)
 
 if __name__ == "__main__":
     num_links = [0, np.inf]

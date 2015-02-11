@@ -1,6 +1,8 @@
 import ipdb
 import argparse
 import logging
+import time
+from random import randint
 
 import numpy as np
 import numpy.linalg as la
@@ -10,6 +12,16 @@ import config as c
 from BSC_NNLS.python import util
 from BSC_NNLS.python.c_extensions.simplex_projection import simplex_projection
 from BSC_NNLS.python import BB, LBFGS, DORE, solvers
+
+def save(x, fname=None, prefix=None):
+    import pickle
+    if fname is None and prefix is not None:
+        t = int(time.time())
+        r = randint(1e5,999999)
+        fname = "%s_%s_%s.pkl" % (prefix, t, r)
+    if fname is not None:
+        with open(fname, 'w') as f:
+            pickle.dump(x, f)
 
 def parser():
     parser = argparse.ArgumentParser()
@@ -112,7 +124,7 @@ def update_args(args, params):
 
     return args
 
-def LS_solve(A,b,x0,N,block_sizes,args):
+def LS_solve(A,b,x0,N,block_sizes,method):
     z0 = util.x2z(x0,block_sizes)
     target = A.dot(x0)-b
 
@@ -141,15 +153,15 @@ def LS_solve(A,b,x0,N,block_sizes,args):
         start = time.time()
         return start
 
-    logging.debug('Starting %s solver...' % args.method)
-    if args.method == 'LBFGS':
+    logging.debug('Starting %s solver...' % method)
+    if method == 'LBFGS':
         LBFGS.solve(z0+1, f, nabla_f, solvers.stopping, log=log,proj=proj,
                     options=options)
         logging.debug("Took %s time" % str(np.sum(times)))
-    elif args.method == 'BB':
+    elif method == 'BB':
         BB.solve(z0,f,nabla_f,solvers.stopping,log=log,proj=proj,
                  options=options)
-    elif args.method == 'DORE':
+    elif method == 'DORE':
         # setup for DORE
         alpha = 0.99
         lsv = util.lsv_operator(A, N)
@@ -161,7 +173,7 @@ def LS_solve(A,b,x0,N,block_sizes,args):
                    lambda b: N.T.dot(A_dore.T.dot(b)), target_dore, proj=proj,
                    log=log,options=options,record_every=100)
         A_dore = None
-    logging.debug('Stopping %s solver...' % args.method)
+    logging.debug('Stopping %s solver...' % method)
     return iters, times, states
 
 def LS_postprocess(states, x0, A, b, x_true, scaling=None, block_sizes=None,

@@ -1,5 +1,4 @@
 import ipdb
-import time
 import logging
 import random
 from pprint import pprint
@@ -19,10 +18,11 @@ from SolverBI import SolverBI
 from SolverCS import SolverCS
 from SolverLSQR import SolverLSQR
 
-from scenario_utils import parser, update_args
+from scenario_utils import parser, update_args, save
 
 class Scenario:
-    def __init__(self, TN=None, S=None, solver=None, args=None, myseed=None):
+    def __init__(self, TN=None, SC=None, solver=None, args=None, myseed=None,
+                 fname_tn=None, fname_sc=None):
         # Save seed for reproducibility
         if myseed is None:
             myseed = random.randint(0,4294967295)
@@ -30,12 +30,31 @@ class Scenario:
         random.seed(myseed)
         self.myseed = myseed
 
+        # Need to set this before the next few steps
         self.args = args if args is not None else self._new_args()
-        self.TN = TN if TN is not None else self._new_traffic_network()
-        self.S = S if S is not None else self._new_sensor_configuration()
+
+        if fname_tn is not None:
+            self.fname_tn = fname_tn
+            import pickle
+            with open(fname_tn) as f:
+                self.TN = pickle.load(f)
+        else:
+            self.TN = TN if TN is not None else self._new_traffic_network()
+
+        if fname_sc is not None:
+            self.fname_sc = fname_sc
+            import pickle
+            with open(fname_sc) as f:
+                self.SC = pickle.load(f)
+        else:
+            self.SC = SC if SC is not None else self._new_sensor_configuration()
+
         self.solver = solver if solver is not None else self._new_solver()
 
         self.output = None
+
+    def save(self):
+        save(self, prefix="%s/Scenario" % c.SCENARIO_DIR_NEW)
 
     def _new_args(self):
         p = parser()
@@ -69,30 +88,30 @@ class Scenario:
     def _new_solver(self):
         eq = 'CP' if self.args.use_CP else 'OD'
         if self.args.solver == 'CS':
-            solver = SolverCS(self.args, full=self.args.all_links,
-                                   L=self.args.use_L, OD=self.args.use_OD,
-                                   CP=self.args.use_CP, LP=self.args.use_LP, eq=eq)
+            solver = SolverCS(full=self.args.all_links, L=self.args.use_L,
+                              OD=self.args.use_OD, CP=self.args.use_CP,
+                              LP=self.args.use_LP, eq=eq)
         elif self.args.solver == 'BI':
             solver = SolverBI(self.args.sparse, full=self.args.all_links,
-                                   L=self.args.use_L, OD=self.args.use_OD,
-                                   CP=self.args.use_CP, LP=self.args.use_LP)
+                              L=self.args.use_L, OD=self.args.use_OD,
+                              CP=self.args.use_CP, LP=self.args.use_LP)
         elif self.args.solver == 'LS':
-            solver = SolverLS(self.args, full=self.args.all_links,
-                                   init=self.args.init, L=self.args.use_L,
-                                   OD=self.args.use_OD, CP=self.args.use_CP,
-                                   LP=self.args.use_LP, eq=eq)
+            solver = SolverLS(full=self.args.all_links, init=self.args.init,
+                              L=self.args.use_L, OD=self.args.use_OD,
+                              CP=self.args.use_CP, LP=self.args.use_LP, eq=eq,
+                              noise=self.args.noise, method=self.args.method)
         elif self.args.solver == 'LSQR':
-            solver = SolverLSQR(self.args, full=self.args.all_links,
-                                     L=self.args.use_L, OD=self.args.use_OD,
-                                     CP=self.args.use_CP, LP=self.args.use_LP)
+            solver = SolverLSQR(full=self.args.all_links, L=self.args.use_L,
+                                OD=self.args.use_OD, CP=self.args.use_CP,
+                                LP=self.args.use_LP)
         else:
             return NotImplemented
         return solver
 
     def run(self):
         # Generate data output
-        self.S.sample_sensors(self.TN)
-        data = self.S.export_matrices(self.TN)
+        self.SC.sample_sensors(self.TN)
+        data = self.SC.export_matrices(self.TN)
         if 'error' in data:
             return {'error' : data['error']}
 
