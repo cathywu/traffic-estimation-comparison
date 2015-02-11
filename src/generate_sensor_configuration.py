@@ -8,7 +8,8 @@ from scenario_utils import save
 
 def generate_sensor_configurations(num_links, num_ODs, num_cellpath_NBs,
                                    num_cellpath_NLs, num_cellpath_NSs,
-                                   num_linkpaths, times=1, myseed=None):
+                                   num_linkpaths, times=1, myseed=None,
+                                   prefix='%s/SC'):
     for i in range(times):
         for num_link in num_links:
             for num_OD in num_ODs:
@@ -22,7 +23,7 @@ def generate_sensor_configurations(num_links, num_ODs, num_cellpath_NBs,
                                                num_cellpath_NL=num_cellpath_NL,
                                                num_cellpath_NS=num_cellpath_NS,
                                                num_linkpath=num_linkpath)
-                                save(SC, prefix="%s/SC" % c.SC_DIR)
+                                save(SC, prefix=prefix % c.SC_DIR)
 
 if __name__ == "__main__":
     num_links = [0, np.inf]
@@ -34,8 +35,11 @@ if __name__ == "__main__":
     myseed = 2347234328
     times = 1
 
-    generate_sensor_configurations(num_links,num_ODs,num_cellpath_NBs,
-                                   num_cellpath_NLs,num_cellpath_NSs,
-                                   num_linkpaths,times=times,myseed=myseed)
+    generate_sensor_configurations(num_links=num_links,num_ODs=num_ODs,
+                                   num_cellpath_NBs=num_cellpath_NBs,
+                                   num_cellpath_NLs=num_cellpath_NLs,
+                                   num_cellpath_NSs=num_cellpath_NSs,
+                                   num_linkpaths=num_linkpaths,
+                                   times=times,myseed=myseed)
 
 

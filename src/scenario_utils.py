@@ -13,6 +13,14 @@ from BSC_NNLS.python import util
 from BSC_NNLS.python.c_extensions.simplex_projection import simplex_projection
 from BSC_NNLS.python import BB, LBFGS, DORE, solvers
 
+def load(fname=None):
+    import pickle
+    try:
+        with open(fname, 'w') as f:
+            return pickle.load(f)
+    except IOError:
+        return None
+
 def save(x, fname=None, prefix=None):
     import pickle
     if fname is None and prefix is not None:

@@ -22,39 +22,65 @@ from scenario_utils import parser, update_args, save
 
 class Scenario:
     def __init__(self, TN=None, SC=None, solver=None, args=None, myseed=None,
-                 fname_tn=None, fname_sc=None):
+                 fname_tn=None, fname_sc=None, fname_solver=None, test=False):
         # Save seed for reproducibility
         if myseed is None:
             myseed = random.randint(0,4294967295)
         np.random.seed(myseed)
         random.seed(myseed)
         self.myseed = myseed
+        self.test = test
 
         # Need to set this before the next few steps
         self.args = args if args is not None else self._new_args()
 
+        self._init_traffic_network(TN,fname_tn)
+        self._init_sensor_configuration(SC,fname_sc)
+        self._init_solver(solver,fname_solver)
+
+        self.output = None
+
+    def _init_traffic_network(self,TN,fname_tn):
         if fname_tn is not None:
             self.fname_tn = fname_tn
             import pickle
-            with open(fname_tn) as f:
+            if self.test:
+                fpath = '%s/test/%s' % (c.TN_DIR,fname_tn)
+            else:
+                fpath = '%s/%s' % (c.TN_DIR,fname_tn)
+            with open(fpath) as f:
                 self.TN = pickle.load(f)
         else:
             self.TN = TN if TN is not None else self._new_traffic_network()
 
+    def _init_sensor_configuration(self,SC,fname_sc):
         if fname_sc is not None:
             self.fname_sc = fname_sc
             import pickle
-            with open(fname_sc) as f:
+            if self.test:
+                fpath = '%s/test/%s' % (c.SC_DIR,fname_sc)
+            else:
+                fpath = '%s/%s' % (c.SC_DIR,fname_sc)
+            with open(fpath) as f:
                 self.SC = pickle.load(f)
         else:
             self.SC = SC if SC is not None else self._new_sensor_configuration()
 
-        self.solver = solver if solver is not None else self._new_solver()
+    def _init_solver(self,solver,fname_solver):
+        if fname_solver is not None:
+            self.fname_solver = fname_solver
+            import pickle
+            if self.test:
+                fpath = '%s/test/%s' % (c.SOLVER_DIR,fname_solver)
+            else:
+                fpath = '%s/%s' % (c.SOLVER_DIR,fname_solver)
+            with open(fpath) as f:
+                self.solver = pickle.load(f)
+        else:
+            self.solver = solver if solver is not None else self._new_solver()
 
-        self.output = None
-
-    def save(self):
-        save(self, prefix="%s/Scenario" % c.SCENARIO_DIR_NEW)
+    def save(self, prefix='%s/Scenario'):
+        save(self, prefix=prefix % c.SCENARIO_DIR_NEW)
 
     def _new_args(self):
         p = parser()
