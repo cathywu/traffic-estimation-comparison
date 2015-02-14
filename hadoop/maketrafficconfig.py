@@ -28,9 +28,6 @@ import os
 for (k,v) in REPOSITORIES.iteritems():
     # add to path after current dir
     os.sys.path.insert(1,v)
-'''
-f = open(base + "/comparison/src/config.py", 'w')
-f.write(config.replace("{0}", base))
 
 PARENT = '{0}/traffic-estimation'
 
@@ -42,3 +39,6 @@ for (k,v) in REPOSITORIES.iteritems():
     # add to path after current dir
     os.sys.path.insert(1,v)
 os.sys.path.insert(1,PARENT)
+'''
+f = open(base + "/comparison/src/config.py", 'w')
+f.write(config.replace("{0}", base))
