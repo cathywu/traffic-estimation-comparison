@@ -43,42 +43,61 @@ def sensor_configurations(myseed=None):
                                    num_linkpaths=num_linkpaths,
                                    times=times,myseed=myseed)
 
-def solvers():
+def solvers(BI=False,LS=False,CS=False,LSQR=False,LS2=False,CS2=False,LSQR2=False):
     solvers = []
     # PRIORITY 1
     # ---------------------------------------------------------------
-    # solvers.append(SolverLSQR(damp=0))
-    # solvers.append(SolverCS(method='cvx_random_sampling_L1_30_replace'))
+    if LSQR:
+        solvers.append(SolverLSQR(damp=0))
+    if CS:
+        solvers.append(SolverCS(method='cvx_random_sampling_L1_30_replace'))
 
-    # solvers.append(SolverLS(init=True,method='BB'))
-    # solvers.append(SolverLS(init=False,method='BB'))
+    if LS:
+        solvers.append(SolverLS(init=True,method='BB'))
+        solvers.append(SolverLS(init=False,method='BB'))
 
-    solvers.append(SolverBI(sparse=True))
-    solvers.append(SolverBI(sparse=False))
+    if BI:
+        solvers.append(SolverBI(sparse=True))
+        solvers.append(SolverBI(sparse=False))
 
     # PRIORITY 2
     # ---------------------------------------------------------------
-    # solvers.append(SolverBI(sparse=0))
-    # solvers.append(SolverBI(sparse=1))
-    # solvers.append(SolverBI(sparse=2))
+    if LS2:
+        solvers.append(SolverLS(init=True,method='LBFGS'))
+        solvers.append(SolverLS(init=False,method='LBFGS'))
+        solvers.append(SolverLS(init=True,method='DORE'))
+        solvers.append(SolverLS(init=False,method='DORE'))
 
-    # solvers.append(SolverLS(init=True,method='LBFGS'))
-    # solvers.append(SolverLS(init=False,method='LBFGS'))
-    # solvers.append(SolverLS(init=True,method='DORE'))
-    # solvers.append(SolverLS(init=False,method='DORE'))
+    if CS2:
+        solvers.append(SolverCS(method='cvx_oracle'))
 
-    # solvers.append(SolverCS(method='cvx_oracle'))
-    # solvers.append(SolverLSQR(damp=1))
+    if LSQR2:
+        solvers.append(SolverLSQR(damp=1))
 
     for s in solvers:
         save(s, prefix="%s/Solver" % c.SOLVER_DIR)
 
-if __name__ == "__main__":
+def experiment(BI=False,LS=False,CS=False,LSQR=False,LS2=False,CS2=False,LSQR2=False):
     myseed = 2347234328
     grid_networks(myseed=myseed)
     # UE_networks()
     sensor_configurations(myseed=myseed)
-    solvers()
+    solvers(BI=BI,LS=LS,CS=CS,LSQR=LSQR,LS2=LS2,CS2=CS2,LSQR2=LSQR2)
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--solver', dest='solver', type=str, default='LS',
+                        help='Solver to seed experiment')
+    args = parser.parse_args()
+    if args.solver == 'LS':
+        experiment(LS=True)
+    elif args.solver == 'BI':
+        experiment(BI=True)
+    elif args.solver == 'CS':
+        experiment(CS=True)
+    elif args.solver == 'LSQR':
+        experiment(LSQR=True)
 
 
 
