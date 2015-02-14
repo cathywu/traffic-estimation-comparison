@@ -80,6 +80,7 @@ class Scenario:
             self.solver = solver if solver is not None else self._new_solver()
 
     def save(self, prefix='%s/Scenario'):
+        print "SAVING EXPERIMENT"
         save(self, prefix=prefix % c.SCENARIO_DIR_NEW)
 
     def _new_args(self):
@@ -118,7 +119,7 @@ class Scenario:
                               OD=self.args.use_OD, CP=self.args.use_CP,
                               LP=self.args.use_LP, eq=eq)
         elif self.args.solver == 'BI':
-            solver = SolverBI(self.args.sparse, full=self.args.all_links,
+            solver = SolverBI(sparse=self.args.sparse, full=self.args.all_links,
                               L=self.args.use_L, OD=self.args.use_OD,
                               CP=self.args.use_CP, LP=self.args.use_LP)
         elif self.args.solver == 'LS':

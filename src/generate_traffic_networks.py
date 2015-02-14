@@ -26,9 +26,10 @@ if __name__ == "__main__":
     myseed = 2347234328
     times = 1
 
-    nrows = range(1,11)
-    ncols = range(2,11)
+    nrows = range(1,5,3)
+    ncols = range(2,5,2)
     nodroutes = [15]
+    sparsity = [0.1, 0.25, 0.5, 0.75, 1]
 
     generate_grid_networks(nrows,ncols,nodroutes,times=times,myseed=myseed)
 

@@ -12,13 +12,14 @@ if __name__ == "__main__":
     solvers = []
     # PRIORITY 1
     # ---------------------------------------------------------------
-    solvers.append(SolverLSQR(damp=0))
-    solvers.append(SolverCS(method='cvx_random_sampling_L1_30_replace'))
+    # solvers.append(SolverLSQR(damp=0))
+    # solvers.append(SolverCS(method='cvx_random_sampling_L1_30_replace'))
 
-    solvers.append(SolverLS(init=True,method='BB'))
-    solvers.append(SolverLS(init=False,method='BB'))
+    # solvers.append(SolverLS(init=True,method='BB'))
+    # solvers.append(SolverLS(init=False,method='BB'))
 
-    solvers.append(SolverBI(sparse=0.3))
+    solvers.append(SolverBI(sparse=True))
+    solvers.append(SolverBI(sparse=False))
 
     # PRIORITY 2
     # ---------------------------------------------------------------

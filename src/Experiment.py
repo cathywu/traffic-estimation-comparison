@@ -2,7 +2,7 @@ import ipdb
 
 import logging
 import os
-import pickle
+import cPickle as pickle
 import random
 from multiprocessing import Process
 
@@ -23,9 +23,10 @@ class Experiment:
         self.tns = os.listdir(self.tn_dir)
         self.scs = os.listdir(self.sc_dir)
         self.solvers = os.listdir(self.solver_dir)
-        self.tns.remove('test')
-        self.scs.remove('test')
-        self.solvers.remove('test')
+        for exclude in ['test','temp','all']:
+            for l in [self.tns, self.scs, self.solvers]:
+                if exclude in l:
+                    l.remove(exclude)
 
         # Timing, tries, sampling parameters
         self.scan_interval = scan_interval
@@ -39,20 +40,27 @@ class Experiment:
 
     def scan_done(self):
         self.done = {}
+        logging.info('Scan start')
         scenario_files = os.listdir(self.scenario_dir)
         for sf in scenario_files:
             filename = "%s/%s" % (self.scenario_dir,sf)
             if os.path.isdir(filename):
                 continue
             with open(filename) as f:
-                s = pickle.load(f)
-                key = (s.fname_tn, s.fname_sc, s.fname_solver)
-                if key in self.done:
-                    self.done[key] += 1
-                else:
-                    self.done[key] = 1
+                try:
+                    s = pickle.load(f)
+                    key = (s.fname_tn, s.fname_sc, s.fname_solver)
+                    if key in self.done:
+                        self.done[key] += 1
+                    else:
+                        self.done[key] = 1
+                except EOFError:
+                    print 'Could not load, please delete: %s' % filename
+        logging.info('Scan done')
+
 
     def sample_new_scenario(self,attempts=1):
+        logging.info('Sampling new scenario')
         for i in xrange(attempts):
             fname_tn = random.choice(self.tns)
             fname_sc = random.choice(self.scs)
@@ -66,10 +74,15 @@ class Experiment:
 
     def run_job(self):
         self.s.run()
+        if self.test:
+            self.s.save(prefix='%s/test/Scenario')
+        else:
+            self.s.save()
 
     def load_long(self):
         long = load(fname='%s/scenarios_long.pkl' % c.DATA_DIR)
         self.long = long if long is not None else {}
+        logging.info('Loading of "long" done')
 
     def save_long(self):
         save(self.long, fname='%s/scenarios_long.pkl' % c.DATA_DIR)
@@ -86,10 +99,12 @@ class Experiment:
             self.s = Scenario(fname_tn=fname_tn,fname_sc=fname_sc,
                          fname_solver=fname_solver,myseed=myseed,test=self.test)
 
+            logging.info('Running job')
             p = Process(target=self.run_job)
             p.start()
             p.join(self.job_timeout)
             if p.is_alive():
+                logging.error("Error (timeout): terminating job %s" % repr(key))
                 # Terminate
                 p.terminate()
                 p.join()
@@ -97,10 +112,6 @@ class Experiment:
                 self.save_long()
             else:
                 self.done[key] = 1
-                if self.test:
-                    self.s.save(prefix='%s/test/Scenario')
-                else:
-                    self.s.save()
 
             # Occasionally update the set of finished tests
             if i > 0 and i % self.scan_interval == 0:
@@ -108,8 +119,8 @@ class Experiment:
 
 if __name__ == "__main__":
     scan_interval = 100
-    sample_attempts = 100
-    job_timeout = 600
+    sample_attempts = 300
+    job_timeout = 900
     njobs = 1000
 
     e = Experiment(c.TN_DIR,c.SC_DIR,c.SOLVER_DIR,c.SCENARIO_DIR_NEW,

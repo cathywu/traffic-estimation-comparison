@@ -4,16 +4,7 @@ import numpy as np
 import random
 from random import shuffle
 
-def new_s(s=None):
-    base_s = {'solver': 'LS', 'model': 'P', 'sparse': False, 'noise': 0.0,
-            'all_links': False, 'use_L': True, 'use_OD': True, 'use_CP': True,
-            'use_LP': True, 'NLP': 0, 'NB': 0, 'NS': 0, 'NL': 0}
-    if s is None:
-        return base_s
-    for (k,v) in base_s.iteritems():
-        if k not in s:
-            s[k] = v
-    return s
+from scenario_utils import new_s
 
 def chunk(l, n):
     """ Yield successive n-sized chunks from l.

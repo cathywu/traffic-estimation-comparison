@@ -3,6 +3,8 @@ import argparse
 import logging
 import time
 from random import randint
+import cPickle as pickle
+import json
 
 import numpy as np
 import numpy.linalg as la
@@ -13,16 +15,31 @@ from BSC_NNLS.python import util
 from BSC_NNLS.python.c_extensions.simplex_projection import simplex_projection
 from BSC_NNLS.python import BB, LBFGS, DORE, solvers
 
+class NumpyAwareJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray) and obj.ndim == 1:
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
+
+def new_s(s=None):
+    base_s = {'solver': 'LS', 'model': 'P', 'sparse': False, 'noise': 0.0,
+              'all_links': False, 'use_L': True, 'use_OD': True, 'use_CP': True,
+              'use_LP': True, 'NLP': 0, 'NB': 0, 'NS': 0, 'NL': 0}
+    if s is None:
+        return base_s
+    for (k,v) in base_s.iteritems():
+        if k not in s:
+            s[k] = v
+    return s
+
 def load(fname=None):
-    import pickle
     try:
-        with open(fname, 'w') as f:
+        with open(fname) as f:
             return pickle.load(f)
     except IOError:
         return None
 
 def save(x, fname=None, prefix=None):
-    import pickle
     if fname is None and prefix is not None:
         t = int(time.time())
         r = randint(1e5,999999)

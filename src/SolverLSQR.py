@@ -54,8 +54,12 @@ class SolverLSQR(Solver):
             return self.output
 
     def analyze(self):
-        x_last, error, self.output = LS_postprocess([self.x0],self.x0,self.A,self.b,
-                                               self.x_true,output=self.output,is_x=True)
+        if 'error' in self.output:
+            return
+        x_last, error, self.output = LS_postprocess([self.x0], self.x0, self.A,
+                                                    self.b, self.x_true,
+                                                    output=self.output,
+                                                    is_x=True)
         self.output['iters'], self.output['times'] = [0], [0]
 
 if __name__ == "__main__":

@@ -98,6 +98,11 @@ class SolverCS(Solver):
         self.mlab = mlab
 
     def solve(self):
+        if self.block_sizes is not None and len(self.block_sizes) == self.AA.shape[1]:
+            self.output['error'] = "Trivial example: nblocks == nroutes"
+            logging.error(self.output['error'])
+            return
+
         duration_time = time.time()
         p = self.mlab.run_func('%s/scenario_to_output.m' % self.CS_PATH,
                           { 'filename' : self.fname, 'type' : self.test,
@@ -110,6 +115,8 @@ class SolverCS(Solver):
             duration_time, [0], [0]
 
     def analyze(self):
+        if 'error' in self.output:
+            return
         x_last, error, self.output = LS_postprocess([self.x],self.x,self.A,self.b,
                                                self.x_true,scaling=self.flow,
                                                block_sizes=self.block_sizes,

@@ -1,4 +1,5 @@
 import numpy as np
+import logging
 
 import config as c
 from Solver import Solver
@@ -10,7 +11,7 @@ from bayesian.grid_simulation import MCMC
 from scenario_utils import LS_postprocess
 
 class SolverBI(Solver):
-    def __init__(self, sparse=0, full=False, L=True, OD=True, CP=True, LP=True):
+    def __init__(self, sparse=False, full=False, L=True, OD=True, CP=True, LP=True):
         Solver.__init__(self)
 
         self.sparse = sparse
@@ -21,7 +22,8 @@ class SolverBI(Solver):
         self.LP = LP
 
     def setup(self, data):
-        self.AA, self.bb_obs, self.EQ, self.x_true, self.scaling, out = \
+        self.AA, self.bb_obs, self.EQ, self.x_true, self.scaling,\
+            self.block_sizes, out = \
             solver_input(data, full=self.full, L=self.L, OD=self.OD,
                          CP=self.CP, LP=self.LP, eq='CP', EQ_elim=False)
         self.output = out
@@ -29,11 +31,22 @@ class SolverBI(Solver):
     def solve(self):
         if self.EQ is None:
             self.output['error'] = "EQ constraint matrix is empty"
+            logging.error(self.output['error'])
+            return
+        if self.block_sizes is not None and len(self.block_sizes) == self.AA.shape[1]:
+            self.output['error'] = "Trivial example: nblocks == nroutes"
+            logging.error(self.output['error'])
+            return
+
+        logging.info('A: %s' % repr(self.AA.shape))
         self.model,alpha,self.x_pri = create_model(self.AA, self.bb_obs, self.EQ,
                                          self.x_true, sparse=self.sparse)
         self.output['alpha'] = alpha
 
     def analyze(self):
+        if 'error' in self.output:
+            return
+
         # model = create_model('%s/%s' % (c.DATA_DIR,test),sparse)
         if np.all(self.x_pri==1):
             x_last, error, self.output = LS_postprocess([self.x_pri], self.x_pri,

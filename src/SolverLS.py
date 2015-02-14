@@ -58,6 +58,11 @@ class SolverLS(Solver):
         # z0 = np.zeros(N.shape[1])
 
     def solve(self):
+        if self.block_sizes is not None and len(self.block_sizes) == self.A.shape[1]:
+            self.output['error'] = "Trivial example: nblocks == nroutes"
+            logging.error(self.output['error'])
+            return
+
         if self.N is None or (self.block_sizes-1).any() == False:
             self.iters, self.times, self.states = [0],[0],[self.x0]
         else:
@@ -65,6 +70,8 @@ class SolverLS(Solver):
                                             self.block_sizes,self.method)
 
     def analyze(self):
+        if 'error' in self.output:
+            return
         x_last, error, self.output = LS_postprocess(self.states,self.x0,self.A,self.b,
                                                self.x_true,scaling=self.flow,
                                                block_sizes=self.block_sizes,N=self.N,
