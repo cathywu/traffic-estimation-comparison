@@ -18,6 +18,15 @@ popd
 
 pushd traffic-estimation/comparison
 python hadoop/maketrafficconfig.py `pwd`/..
+mkdir data
+mkdir data/sensor_configurations
+mkdir data/solvers
+mkdir data/networks
+mkdir data/scenarios
+mkdir data/solvers/test
+mkdir data/sensor_configurations/test
+mkdir data/networks/test
+mkdir data/scenarios/test
 popd
 
 sudo yum install -y lapack lapack-devel blas blas-devel
