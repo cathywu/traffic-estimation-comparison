@@ -8,7 +8,7 @@ base = sys.argv[1].strip()
 
 config = '''ACCEPTED_LOG_LEVELS = ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG', 'WARN']
 
-DATA_DIR = '{0}/traffic-estimation/comparison/data'
+DATA_DIR = '{0}/comparison/data'
 TN_DIR = '%s/networks' % DATA_DIR
 SC_DIR = '%s/sensor_configurations' % DATA_DIR
 SCENARIO_DIR_NEW = '%s/scenarios' % DATA_DIR
