@@ -3,12 +3,12 @@
 # For use on AWS instance, to update the various repositories (via git pull)
 # @author cathywu
 
-pushd ~/traffic
-pushd traffic-estimation-comparison
+pushd ~/traffic-estimation
+pushd comparison
 git stash
 popd
 
-for repo in traffic-estimation-comparison synthetic-traffic traffic-estimation traffic-estimation-bayesian traffic-estimation-wardrop
+for repo in comparison synthetic_traffic BSC_NNLS bayesian
 do
     pushd $repo
     echo "$repo"
@@ -16,8 +16,8 @@ do
     popd
 done
 
-pushd traffic-estimation-comparison
-python maketrafficconfig.py `pwd`/..
+pushd comparison
+python hadoop/maketrafficconfig.py `pwd`/..
 popd
 
 popd
