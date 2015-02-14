@@ -14,20 +14,15 @@ SC_DIR = '%s/sensor_configurations' % DATA_DIR
 SCENARIO_DIR_NEW = '%s/scenarios' % DATA_DIR
 SOLVER_DIR = '%s/solvers' % DATA_DIR
 
-SCENARIO_DIR = '{0}/traffic-estimation/comparison/hadoop/input'
-RESULT_DIR = '{0}/traffic-estimation/comparison/output'
+SCENARIO_DIR = '{0}/comparison/hadoop/input'
+RESULT_DIR = '{0}/comparison/output'
 
 # Replace with repository homes
 REPOSITORIES = { 
-        'synthetic': '{0}/traffic-estimation/synthetic_traffic',
-        'LS': '{0}/traffic-estimation/BSC_NNLS',
-        'BI': '{0}/traffic-estimation/bayesian',
-        'KSP': '{0}/traffic-estimation/synthetic_traffic/grid_networks/YenKSP' }
-
-import os
-for (k,v) in REPOSITORIES.iteritems():
-    # add to path after current dir
-    os.sys.path.insert(1,v)
+        'synthetic': '{0}/synthetic_traffic',
+        'LS': '{0}/BSC_NNLS',
+        'BI': '{0}/bayesian',
+        'KSP': '{0}/synthetic_traffic/grid_networks/YenKSP' }
 
 PARENT = '{0}/traffic-estimation'
 
