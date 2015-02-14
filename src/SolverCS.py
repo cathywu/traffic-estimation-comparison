@@ -98,7 +98,7 @@ class SolverCS(Solver):
         self.mlab = mlab
 
     def solve(self):
-        if self.block_sizes is not None and len(self.block_sizes) == self.AA.shape[1]:
+        if self.block_sizes is not None and len(self.block_sizes) == self.A.shape[1]:
             self.output['error'] = "Trivial example: nblocks == nroutes"
             logging.error(self.output['error'])
             return
