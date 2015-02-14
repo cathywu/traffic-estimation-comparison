@@ -7,18 +7,17 @@ popd
 source ~/trafficsetup/bin/activate
 
 pushd ~
-mkdir traffic
-pushd traffic
-git clone https://github.com/cathywu/traffic-estimation-comparison
-git clone https://github.com/cathywu/synthetic-traffic
-git clone https://github.com/cathywu/traffic-estimation
-git clone https://github.com/cathywu/traffic-estimation-bayesian
-git clone https://github.com/jeromethai/traffic-estimation-wardrop
+mkdir traffic-estimation
+pushd traffic-estimation
+touch __init__.py
+git clone https://github.com/cathywu/traffic-estimation-comparison comparison
+git clone https://github.com/cathywu/synthetic-traffic synthetic_traffic
+git clone https://github.com/cathywu/traffic-estimation BSC_NNLS
+git clone https://github.com/cathywu/traffic-estimation-bayesian bayesian
 popd
 
-pushd traffic/traffic-estimation-comparison
-wget https://s3-us-west-2.amazonaws.com/comparisonpaper/hadoop-helpers/maketrafficconfig.py
-python maketrafficconfig.py `pwd`/..
+pushd traffic-estimation/comparison
+python hadoop/maketrafficconfig.py `pwd`/..
 popd
 
 sudo yum install -y lapack lapack-devel blas blas-devel
@@ -31,7 +30,7 @@ yes | sudo yum install ncurses-devel
 pip install readline
 
 # Setup specific to traffic-estimation
-pushd traffic/traffic-estimation/python/c_extensions
+pushd traffic-estimation/BSC_NNLS/python/c_extensions
 python setup.py build_ext --inplace
 popd
 
