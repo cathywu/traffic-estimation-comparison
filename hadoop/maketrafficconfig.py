@@ -29,7 +29,7 @@ for (k,v) in REPOSITORIES.iteritems():
     # add to path after current dir
     os.sys.path.insert(1,v)
 '''
-f = open(base + "/traffic-estimation/comparison/src/config.py", 'w')
+f = open(base + "/comparison/src/config.py", 'w')
 f.write(config.replace("{0}", base))
 
 PARENT = '{0}/traffic-estimation'
