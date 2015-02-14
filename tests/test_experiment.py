@@ -5,8 +5,8 @@ import numpy as np
 import src.config as c
 from src.scenario_utils import save
 from src.SolverLSQR import SolverLSQR
-from src.generate_sensor_configuration import generate_sensor_configurations
-from src.generate_traffic_networks import generate_grid_networks
+from src.experiment_utils import generate_sensor_configurations, \
+    generate_grid_networks
 from src.Experiment import Experiment
 
 __author__ = 'cathywu'
