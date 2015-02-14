@@ -24,7 +24,7 @@ REPOSITORIES = {
         'BI': '{0}/bayesian',
         'KSP': '{0}/synthetic_traffic/grid_networks/YenKSP' }
 
-PARENT = '{0}/traffic-estimation'
+PARENT = '{0}'
 
 import logging
 logging.basicConfig(level=logging.WARN)
