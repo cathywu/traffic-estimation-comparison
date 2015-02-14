@@ -115,6 +115,7 @@ class SolverCS(Solver):
             duration_time, [0], [0]
 
     def analyze(self):
+        self.mlab = None
         if 'error' in self.output:
             return
         x_last, error, self.output = LS_postprocess([self.x],self.x,self.A,self.b,

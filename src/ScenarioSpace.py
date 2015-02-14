@@ -88,19 +88,22 @@ class ScenarioSpace:
         :return:
         """
         output_fname = "%s/output_Experiment.txt" % c.RESULT_DIR
-        files = os.listdir(c.SCENARIO_DIR_NEW)
+        dirs = [c.SCENARIO_DIR_NEW, '%s/temp' % c.SCENARIO_DIR_NEW]
         with open(output_fname, 'w') as out:
-            for f in files:
-                try:
-                    fname = "%s/%s" % (c.SCENARIO_DIR_NEW,f)
-                    s = load(fname)
-                    params = self.get_args(s)
-                    output = s.output
-                    output['params'] = params
-                    out.write('%s\n' % json.dumps(output, cls=NumpyAwareJSONEncoder))
-                except (EOFError, AttributeError):
-                    print 'EOFError... %s' % fname
-                    pass
+            for dir in dirs:
+                files = os.listdir(dir)
+                for f in files:
+                    fname = "%s/%s" % (dir,f)
+                    try:
+                        s = load(fname)
+                        params = self.get_args(s)
+                        output = s.output
+                        output['params'] = params
+                        out.write('%s\n' % json.dumps(output, cls=NumpyAwareJSONEncoder))
+                        # print 'Loaded fine: %s' % fname
+                    except (EOFError, AttributeError):
+                        print 'rm %s' % fname
+                        pass
 
     def load_output(self):
         """
@@ -429,11 +432,11 @@ class ScenarioSpace:
 
 if __name__ == "__main__":
     SS = ScenarioSpace(no_lsqr=True)
-    # SS.scenarios_to_output()
-    SS.load_output()
-    SS.plot_solver_comparison(sparse=False, caption='',
-                       error_leq=0.1, error_leq2=0.3, model='P',
-                       error_leq3=0.5, max_NLPCP=100)
+    SS.scenarios_to_output()
+    # SS.load_output()
+    # SS.plot_solver_comparison(sparse=False, caption='',
+    #                    error_leq=0.1, error_leq2=0.3, model='P',
+    #                    error_leq3=0.5, max_NLPCP=100)
 
     # scenario_files = os.listdir(c.SCENARIO_DIR_NEW)
     # for sf in scenario_files:

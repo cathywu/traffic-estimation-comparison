@@ -79,9 +79,9 @@ def solvers(BI=False,LS=False,CS=False,LSQR=False,LS2=False,CS2=False,LSQR2=Fals
 
 def experiment(BI=False,LS=False,CS=False,LSQR=False,LS2=False,CS2=False,LSQR2=False):
     myseed = 2347234328
-    grid_networks(myseed=myseed)
+    # grid_networks(myseed=myseed)
     # UE_networks()
-    sensor_configurations(myseed=myseed)
+    # sensor_configurations(myseed=myseed)
     solvers(BI=BI,LS=LS,CS=CS,LSQR=LSQR,LS2=LS2,CS2=CS2,LSQR2=LSQR2)
 
 if __name__ == "__main__":
