@@ -73,6 +73,7 @@ class SolverBI(Solver):
                                                self.bb_obs, self.x_true,
                                                output=self.output, is_x=True)
         self.output['blocks'] = self.EQ.shape[0] if self.EQ is not None else None
+        self.model, self.x_pri = None, None
 
 if __name__ == "__main__":
     import unittest
