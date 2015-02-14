@@ -120,7 +120,7 @@ class Experiment:
 if __name__ == "__main__":
     scan_interval = 100
     sample_attempts = 300
-    job_timeout = 900
+    job_timeout = 9000
     njobs = 1000
 
     e = Experiment(c.TN_DIR,c.SC_DIR,c.SOLVER_DIR,c.SCENARIO_DIR_NEW,
