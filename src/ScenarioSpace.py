@@ -40,7 +40,7 @@ class ScenarioSpace:
             args['model'] = 'P'
             args['nrow'] = s.TN.m
             args['ncol'] = s.TN.n
-            args['sparse'] = True if s.TN.sparsity is None else False
+            args['sparse'] = True if s.TN.concentration is None else False
             args['nodroutes'] = s.TN.r
 
         # Sensor configuration args
@@ -315,9 +315,8 @@ class ScenarioSpace:
                                           lambda x: get_key(x, 'perflow'),
                                           stat=stat)
                 if 'BI' in solvers:
-                    ipdb.set_trace()
                     print perflow_wrong, solvers, dd.keys(), len(dd.values())
-                if solvers.size >= 2:
+                if solvers.size >= 3:
                     # if dict(k)['nrow'] in [1,4] and dict(k)['ncol'] in [2,4]:
                     # print 'Need to test for BI: NLP=%s NCP=%s' % \
                     #           (dict(k)['NLP'], dict(k)['NCP'])
@@ -466,8 +465,8 @@ if __name__ == "__main__":
     SS = ScenarioSpace(no_lsqr=True)
     # SS.scenarios_to_output()
     SS.load_output()
-    SS.plot_solver_comparison(sparse=False, caption='', model='P', max_NLPCP=200,
-                          error_leq=0.1, error_leq2=0.3, error_leq3=0.5, b2n_leq=1.00, b2n_geq=0.95)
+    SS.plot_solver_comparison(sparse=True, caption='', model='P', max_NLPCP=200,
+                          error_leq=0.1, error_leq2=0.3, error_leq3=0.5, b2n_leq=1.00, b2n_geq=0.00)
 
     # scenario_files = os.listdir(c.SCENARIO_DIR_NEW)
     # for sf in scenario_files:

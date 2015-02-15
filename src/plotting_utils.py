@@ -237,7 +237,7 @@ def load_output(no_lsqr=False):
     :return:
     """
     files = os.listdir(c.RESULT_DIR)
-    files = ['output_Experiment.txt']
+    # files = ['output_Experiment.txt']
 
     scenarios = []
     scenarios_all_links = []
@@ -298,6 +298,5 @@ def load_output(no_lsqr=False):
                     scenarios_v2.append(d)
                 if filter_v3(d):
                     scenarios_v3.append(d)
-    ipdb.set_trace()
 
     return scenarios, scenarios_all_links, scenarios_v2, scenarios_v3

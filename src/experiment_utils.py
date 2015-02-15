@@ -15,6 +15,9 @@ def generate_grid_networks(nrows, ncols, nodroutes, times=1, myseed=None,
                     TN = GridNetwork(ncol=ncol,nrow=nrow,nodroutes=nodroute,
                                      myseed=myseed)
                     save(TN, prefix=prefix % c.TN_DIR)
+                    TN = GridNetwork(ncol=ncol,nrow=nrow,nodroutes=nodroute,
+                                     myseed=myseed, concentration=0.1)
+                    save(TN, prefix=prefix % c.TN_DIR)
 
 def generate_equilibrium_networks(SOs=(False),path=None, prefix='%s/TN_EQ'):
     for SO in SOs:

@@ -18,7 +18,7 @@ from SolverBI import SolverBI
 from SolverCS import SolverCS
 from SolverLSQR import SolverLSQR
 
-from scenario_utils import parser, update_args, save
+from scenario_utils import parser, save
 
 class Scenario:
     def __init__(self, TN=None, SC=None, solver=None, args=None, myseed=None,
@@ -71,7 +71,7 @@ class Scenario:
             self.fname_solver = fname_solver
             import pickle
             if self.test:
-                fpath = '%s/test/%s' % (c.SOLVER_DIR,fname_solver)
+                fpath = '%s/test/%s' % (c.SOLVER_DIR, fname_solver)
             else:
                 fpath = '%s/%s' % (c.SOLVER_DIR,fname_solver)
             with open(fpath) as f:
@@ -96,13 +96,18 @@ class Scenario:
             TN = GridNetwork(nrow=self.args.nrow, ncol=self.args.ncol,
                              nodroutes=self.args.nodroutes, myseed=self.myseed)
             if type == 'small_graph_OD.mat':
-                TN.sample_OD_flow(o_flow=1.0,nnz_oroutes=10)
+                TN = GridNetwork(nrow=self.args.nrow, ncol=self.args.ncol,
+                                 nodroutes=self.args.nodroutes,
+                                 myseed=self.myseed, o_flow=1.0, nnz_oroutes=10)
             elif type == 'small_graph_OD_dense.mat':
-                TN.sample_OD_flow(o_flow=1.0,sparsity=0.1)
+                TN = GridNetwork(nrow=self.args.nrow, ncol=self.args.ncol,
+                                 nodroutes=self.args.nodroutes,
+                                 myseed=self.myseed, o_flow=1.0,
+                                 concentration=0.1)
         else:
             SO = True if self.args.model == 'SO' else False
 
-            TN = EquilibriumNetwork(SO=SO,path='los_angeles_data_2.mat')
+            TN = EquilibriumNetwork(SO=SO, path='los_angeles_data_2.mat')
         return TN
 
     def _new_sensor_configuration(self):
