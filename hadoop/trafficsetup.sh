@@ -23,6 +23,12 @@ mkdir data/sensor_configurations
 mkdir data/solvers
 mkdir data/networks
 mkdir data/scenarios
+
+mkdir data/solvers/temp
+mkdir data/sensor_configurations/temp
+mkdir data/networks/temp
+mkdir data/scenarios/temp
+
 mkdir data/solvers/test
 mkdir data/sensor_configurations/test
 mkdir data/networks/test

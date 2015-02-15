@@ -34,8 +34,8 @@ class SolverCS(Solver):
 
         # Test parameters
         # self.method = 'cvx_random_sampling_L1_30_replace'
-        # self.method = 'cvx_random_sampling_L1_6000_replace'
-        self.method = 'cvx_oracle'
+        self.method = 'cvx_random_sampling_L1_6000_replace'
+        # self.method = 'cvx_oracle'
         # alg = 'cvx_unconstrained_L1'
         # alg = 'cvx_L2'
         # alg = 'cvx_raw'
