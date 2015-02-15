@@ -10,10 +10,10 @@ pushd ~
 mkdir traffic-estimation
 pushd traffic-estimation
 touch __init__.py
-git clone https://github.com/cathywu/traffic-estimation-comparison comparison
-git clone https://github.com/cathywu/synthetic-traffic synthetic_traffic
-git clone https://github.com/cathywu/traffic-estimation BSC_NNLS
-git clone https://github.com/cathywu/traffic-estimation-bayesian bayesian
+git clone https://github.com/megacell/traffic-estimation-comparison comparison
+git clone https://github.com/megacell/synthetic-traffic synthetic_traffic
+git clone https://github.com/megacell/BSC-NNLS BSC_NNLS
+git clone https://github.com/megacell/traffic-estimation-bayesian bayesian
 popd
 
 pushd traffic-estimation/comparison
