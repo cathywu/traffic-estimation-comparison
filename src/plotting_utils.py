@@ -55,7 +55,7 @@ def plot_scatter(x,y,c=None,s=None,label=None,info=None,alpha=1.0,marker='o',
 def filter(s,group_by=(),match_by=(),geq=(),leq=()):
     d = {} if group_by is not None else []
     valid = ['nroutes','nsensors','blocks','percent flow allocated incorrectly',
-             'NLPCP','use_L','use_OD','use_CP','use_LP','duration']
+             'NLPCP','use_L','use_OD','use_CP','use_LP','duration','blocks_to_routes']
     for x in s:
         match = True
         for (param, value) in match_by:
@@ -108,6 +108,8 @@ def get_key(d, key):
         return _get_per_flow(d)
     elif key == 'blocks':
         return _get_blocks(d)
+    elif key == 'blocks_to_routes':
+        return get_key(d, 'blocks') / get_key(d, 'nroutes')
     elif key == 'max_links':
         return _get_max_links(d)
     ## Sensor configuration/constraints retrieval
