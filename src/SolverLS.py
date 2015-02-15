@@ -64,10 +64,13 @@ class SolverLS(Solver):
             return
 
         if self.N is None or (self.block_sizes-1).any() == False:
-            self.iters, self.times, self.states = [0],[0],[self.x0]
+            iters, times, self.states = [0],[0],[self.x0]
         else:
-            self.iters, self.times, self.states = LS_solve(self.A,self.b,self.x0,self.N,
+            iters, times, self.states = LS_solve(self.A,self.b,self.x0,self.N,
                                             self.block_sizes,self.method)
+
+        self.output['duration'] = np.sum(times)
+        self.output['iters'], self.output['times'] = list(iters), list(times)
 
     def analyze(self):
         if 'error' in self.output:

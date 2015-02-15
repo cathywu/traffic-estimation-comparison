@@ -315,6 +315,7 @@ class ScenarioSpace:
                                           lambda x: get_key(x, 'perflow'),
                                           stat=stat)
                 if 'BI' in solvers:
+                    ipdb.set_trace()
                     print perflow_wrong, solvers, dd.keys(), len(dd.values())
                 if solvers.size >= 2:
                     # if dict(k)['nrow'] in [1,4] and dict(k)['ncol'] in [2,4]:
