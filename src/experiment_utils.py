@@ -7,10 +7,13 @@ from scenario_utils import save
 
 
 def generate_grid_networks(nrows, ncols, nodroutes, times=1, myseed=None,
-                           prefix='%s/TN_Grid'):
+                           prefix='%s/TN_Grid',max_prod=None):
     for i in range(times):
         for nrow in nrows:
             for ncol in ncols:
+                if max_prod is not None:
+                    if nrow * ncol > max_prod:
+                        continue
                 for nodroute in nodroutes:
                     TN = GridNetwork(ncol=ncol,nrow=nrow,nodroutes=nodroute,
                                      myseed=myseed)

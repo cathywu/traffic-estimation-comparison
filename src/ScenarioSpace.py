@@ -314,12 +314,13 @@ class ScenarioSpace:
                 perflow_wrong = get_stats(dd.itervalues(),
                                           lambda x: get_key(x, 'perflow'),
                                           stat=stat)
-                if 'BI' in solvers:
-                    print perflow_wrong, solvers, dd.keys(), len(dd.values())
-                if solvers.size >= 3:
-                    # if dict(k)['nrow'] in [1,4] and dict(k)['ncol'] in [2,4]:
-                    # print 'Need to test for BI: NLP=%s NCP=%s' % \
-                    #           (dict(k)['NLP'], dict(k)['NCP'])
+                # if 'BI' in solvers:
+                #     print perflow_wrong, solvers, dd.keys(), len(dd.values())
+                if solvers.size >= 2:
+                    if dict(k)['nrow']*dict(k)['ncol'] <= 40:
+                        print 'Need to test for BI: NLP=%s NCP=%s (size = (%s,%s))' % \
+                              (dict(k)['NLP'], dict(k)['NCP'], dict(k)['nrow'],
+                               dict(k)['ncol'])
                     best_perflow, best_solver = \
                         min(zip(perflow_wrong, solvers), key=lambda x: x[0])
                     if best_perflow < error_leq:
