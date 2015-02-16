@@ -5,10 +5,11 @@ import os
 import cPickle as pickle
 import random
 from multiprocessing import Process
+import json
 
 import config as c
 from Scenario import Scenario
-from scenario_utils import save, load
+from scenario_utils import save, load, args_from_SC, args_from_solver, args_from_TN
 
 class Experiment:
 
@@ -87,6 +88,83 @@ class Experiment:
     def save_long(self):
         save(self.long, fname='%s/scenarios_long.pkl' % c.DATA_DIR)
 
+    @staticmethod
+    def get_available(fnames, dir, args_fn):
+        args_list = []
+        for fname in fnames:
+            fpath = '%s/%s' % (dir,fname)
+            with open(fpath) as f:
+                obj = pickle.load(f)
+            args = args_fn(obj)
+            args_list.append((args, fname))
+        return args_list
+
+    @staticmethod
+    def find(params, args_list, keys):
+        param_keys = {}
+        for key in keys:
+            if key in params:
+                param_keys[key] = params[key]
+
+        for (args,fname) in args_list:
+            if frozenset(args) == frozenset(param_keys):
+                return fname
+        return None
+
+    def run_experiment_from_file(self,fname):
+        myseed = 2347234328
+        TNs = Experiment.get_available(self.tns, c.TN_DIR, args_from_TN)
+        SCs = Experiment.get_available(self.scs, c.SC_DIR, args_from_SC)
+        solvers = Experiment.get_available(self.solvers, c.SOLVER_DIR,
+                                           args_from_solver)
+
+        with open(fname) as todo:
+            lines = todo.readlines()
+            random.shuffle(lines)
+            for (i,line) in enumerate(lines):
+                params = json.loads(line)
+                fname_tn = Experiment.find(params, TNs,
+                                           ['model', 'nrow', 'ncol', 'sparse',
+                                            'nodroutes'])
+                fname_sc = Experiment.find(params, SCs,
+                                           ['NS', 'NL', 'NB', 'NLP'])
+                fname_solver = Experiment.find(params, solvers,
+                                               ['solver', 'method', 'init',
+                                                'noise', 'eq', 'all_links',
+                                                'use_L', 'use_OD', 'use_CP',
+                                                'use_LP'])
+                key = (fname_tn,fname_sc,fname_solver)
+
+                if fname_tn is None or fname_sc is None or fname_solver is None:
+                    print "Scenario configuration not found: %s" % params
+                    continue
+
+                if key in self.done:
+                    print "Already done: %s" % params
+                    continue
+
+                self.s = Scenario(fname_tn=fname_tn, fname_sc=fname_sc,
+                              fname_solver=fname_solver, myseed=myseed,
+                              test=self.test)
+
+                logging.info('Running job')
+                p = Process(target=self.run_job)
+                p.start()
+                p.join(self.job_timeout)
+                if p.is_alive():
+                    logging.error("Error (timeout): terminating job %s" % repr(key))
+                    # Terminate
+                    p.terminate()
+                    p.join()
+                    self.long[key] = 0
+                    self.save_long()
+                else:
+                    self.done[key] = 1
+
+                # Occasionally update the set of finished tests
+                if i > 0 and i % self.scan_interval == 0:
+                    self.scan_done()
+
     def run_experiment(self,jobs=100):
         myseed = 2347234328
 
@@ -96,8 +174,9 @@ class Experiment:
             if fname_sc is None:
                 break;
             key = (fname_tn,fname_sc,fname_solver)
-            self.s = Scenario(fname_tn=fname_tn,fname_sc=fname_sc,
-                         fname_solver=fname_solver,myseed=myseed,test=self.test)
+            self.s = Scenario(fname_tn=fname_tn, fname_sc=fname_sc,
+                              fname_solver=fname_solver, myseed=myseed,
+                              test=self.test)
 
             logging.info('Running job')
             p = Process(target=self.run_job)
@@ -127,5 +206,12 @@ if __name__ == "__main__":
                    scan_interval=scan_interval,
                    sample_attempts=sample_attempts,job_timeout=job_timeout)
 
-    e.run_experiment(njobs)
-
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--fname', dest='fname', type=str, default=None,
+                        help='File with scenario configurations')
+    args = parser.parse_args()
+    if args.fname is not None:
+        e.run_experiment_from_file(args.fname)
+    else:
+        e.run_experiment(njobs)
