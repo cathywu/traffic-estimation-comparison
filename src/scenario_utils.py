@@ -15,6 +15,64 @@ from BSC_NNLS.python import util
 from BSC_NNLS.python.c_extensions.simplex_projection import simplex_projection
 from BSC_NNLS.python import BB, LBFGS, DORE, solvers
 
+def args_from_TN(TN, args=None):
+    # TrafficNetwork args
+    if args is None:
+        args = {}
+
+    if TN.__class__.__name__ == 'EquilibriumNetwork':
+        args['model'] = 'SO' if TN.SO is True else 'UE'
+    elif TN.__class__.__name__ == 'GridNetwork':
+        args['model'] = 'P'
+        args['nrow'] = TN.m
+        args['ncol'] = TN.n
+        args['sparse'] = True if TN.concentration is None else False
+        args['nodroutes'] = TN.r
+    return args
+
+def args_from_SC(SC, args=None):
+    # Sensor configuration args
+    if args is None:
+        args = {}
+    args['NS'] = int(SC.num_cellpath_NS)
+    # FIXME untested and not integrated well, but also unused for the time being
+    args['NL'] = min(int(SC.num_cellpath_NL), SC.num_link)
+    args['NB'] = int(SC.num_cellpath_NB)
+    args['NLP'] = len(SC.linkpath_sensors) if SC.linkpath_sensors is \
+                                                    not None else 0
+    return args
+
+def args_from_solver(solver, args=None):
+    # Sensor configuration args
+    if args is None:
+        args = {}
+
+    if solver.__class__.__name__ == 'SolverLS':
+        args['solver'] = 'LS'
+        args['method'] = solver.method
+        args['init'] = solver.init
+        args['noise'] = solver.noise
+        args['eq'] = solver.eq
+    elif solver.__class__.__name__ == 'SolverLSQR':
+        args['solver'] = 'LSQR'
+        args['damp'] = solver.damp
+        args['eq'] = solver.eq
+    elif solver.__class__.__name__ == 'SolverBI':
+        args['solver'] = 'BI'
+        args['sparse_BI'] = solver.sparse
+    elif solver.__class__.__name__ == 'SolverCS':
+        args['solver'] = 'CS'
+        args['noise'] = solver.noise
+        args['eq'] = solver.eq
+        args['init'] = solver.init
+        args['method'] = solver.method
+    args['all_links'] = solver.full
+    args['use_L'] = solver.L
+    args['use_OD'] = solver.OD
+    args['use_CP'] = solver.CP
+    args['use_LP'] = solver.LP
+    return args
+
 class NumpyAwareJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.ndarray) and obj.ndim == 1:
@@ -24,7 +82,8 @@ class NumpyAwareJSONEncoder(json.JSONEncoder):
 def new_s(s=None):
     base_s = {'solver': 'LS', 'model': 'P', 'sparse': False, 'noise': 0.0,
               'all_links': False, 'use_L': True, 'use_OD': True, 'use_CP': True,
-              'use_LP': True, 'NLP': 0, 'NB': 0, 'NS': 0, 'NL': 0}
+              'use_LP': True, 'NLP': 0, 'NB': 0, 'NS': 0, 'NL': 0, 'eq': 'CP',
+              'init': False}
     if s is None:
         return base_s
     for (k,v) in base_s.iteritems():
