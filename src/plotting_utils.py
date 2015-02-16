@@ -126,10 +126,17 @@ def get_key(d, key):
     ## Sensor configuration/constraints retrieval
     # CP/LP sensor configuration
     elif key == 'NCP':
-        NCP = d['params']['NB'] + d['params']['NS'] + d['params']['NL']
+        NCP = int(d['params']['NB']) + int(d['params']['NS']) + \
+              int(d['params']['NL'])
         return get_key(d, 'use_CP') * NCP
+    elif key == 'NS':
+        return get_key(d, 'use_CP') * int(d['params']['NS'])
+    elif key == 'NL':
+        return get_key(d, 'use_CP') * int(d['params']['NL'])
+    elif key == 'NB':
+        return get_key(d, 'use_CP') * int(d['params']['NB'])
     elif key == 'NLP':
-        return get_key(d, 'use_LP') * d['params']['NLP']
+        return get_key(d, 'use_LP') * int(d['params']['NLP'])
     elif key == 'NLPCP':
         return get_key(d, 'NCP') + get_key(d, 'NLP')
     # Links/OD configurations/constraints
@@ -239,6 +246,9 @@ def load_output(no_lsqr=False):
     files = os.listdir(c.RESULT_DIR)
     # files = ['output_Experiment.txt']
 
+    CS_methods = ['cvx_oracle', 'random_sampling_L1_6000_replace'] #, 'random_sampling_L1_30_replace']
+    LS_methods = ['BB', 'LBFGS', 'DORE']
+
     scenarios = []
     scenarios_all_links = []
     scenarios_v2 = []
@@ -264,12 +274,24 @@ def load_output(no_lsqr=False):
                 # Exclude invalid dicts
                 if not filter_valid(d):
                     continue
+
+                # Exclude LSQR results
                 try:
-                    # Exclude LSQR results
                     if no_lsqr and d['params']['solver'] == 'LSQR':
                         continue
                 except TypeError:
                     ipdb.set_trace()
+
+                # Select from preset methods
+                if d['params']['solver'] == 'CS':
+                    if 'method' not in d['params']:
+                        if 'random_sampling_L1_30_replace' not in CS_methods:
+                            continue
+                    elif d['params']['method'] not in CS_methods:
+                        continue
+                if d['params']['solver'] == 'LS' and \
+                                d['params']['method'] not in LS_methods:
+                    continue
 
                 # Minor correction: get rid of 'var'
                 if 'var' in d:
@@ -299,4 +321,5 @@ def load_output(no_lsqr=False):
                 if filter_v3(d):
                     scenarios_v3.append(d)
 
+    # ipdb.set_trace()
     return scenarios, scenarios_all_links, scenarios_v2, scenarios_v3
