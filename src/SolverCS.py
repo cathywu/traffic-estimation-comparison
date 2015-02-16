@@ -91,8 +91,8 @@ class SolverCS(Solver):
             pprint({ 'A': self.A, 'b': self.b, 'x_true': self.x_true,
                      'flow': self.flow, 'x0': self.x0,
                      'block_sizes': self.block_sizes })
-            import ipdb
-            ipdb.set_trace()
+            self.output['error'] = 'Problem saving matrices, likely A is empty'
+            return
 
         # Perform test via MATLAB
         from pymatbridge import Matlab
@@ -103,6 +103,9 @@ class SolverCS(Solver):
         self.mlab = mlab
 
     def solve(self):
+        if 'error' in self.output:
+            return
+
         if self.block_sizes is not None and len(self.block_sizes) == \
                 self.A.shape[1]:
             self.output['error'] = "Trivial example: nblocks == nroutes"
