@@ -2,15 +2,18 @@ from __future__ import division
 import ipdb
 import os
 import json
+from pprint import pprint
 
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure, show
 
 import config as c
-from scenario_utils import load, new_s, NumpyAwareJSONEncoder
+from scenario_utils import load, new_s, NumpyAwareJSONEncoder, args_from_SC, \
+    args_from_solver, args_from_TN
 from plotting_utils import plot_scatter, filter, get_stats, get_key, get_step, \
     load_output
+from generate_scenarios import dump
 
 
 class ScenarioSpace:
@@ -32,49 +35,12 @@ class ScenarioSpace:
         :return:
         """
         args = new_s()
-
         # TrafficNetwork args
-        if s.TN.__class__.__name__ == 'EquilibriumNetwork':
-            args['model'] = 'SO' if s.TN.SO is True else 'UE'
-        elif s.TN.__class__.__name__ == 'GridNetwork':
-            args['model'] = 'P'
-            args['nrow'] = s.TN.m
-            args['ncol'] = s.TN.n
-            args['sparse'] = True if s.TN.concentration is None else False
-            args['nodroutes'] = s.TN.r
-
+        args = args_from_TN(s.TN, args)
         # Sensor configuration args
-        args['NS'] = s.SC.num_cellpath_NS
-        args['NL'] = s.SC.num_cellpath_NL
-        args['NB'] = s.SC.num_cellpath_NB
-        args['NLP'] = len(s.SC.linkpath_sensors) if s.SC.linkpath_sensors is \
-                                                    not None else 0
-
+        args = args_from_SC(s.SC, args)
         # Solver args
-        if s.solver.__class__.__name__ == 'SolverLS':
-            args['solver'] = 'LS'
-            args['method'] = s.solver.method
-            args['init'] = s.solver.init
-            args['noise'] = s.solver.noise
-            args['eq'] = s.solver.eq
-        elif s.solver.__class__.__name__ == 'SolverLSQR':
-            args['solver'] = 'LSQR'
-            args['damp'] = s.solver.damp
-            args['eq'] = s.solver.eq
-        elif s.solver.__class__.__name__ == 'SolverBI':
-            args['solver'] = 'BI'
-            args['sparse_BI'] = s.solver.sparse
-        elif s.solver.__class__.__name__ == 'SolverCS':
-            args['solver'] = 'CS'
-            args['noise'] = s.solver.noise
-            args['eq'] = s.solver.eq
-            args['init'] = s.solver.init
-            args['method'] = s.solver.method
-        args['all_links'] = s.solver.full
-        args['use_L'] = s.solver.L
-        args['use_OD'] = s.solver.OD
-        args['use_CP'] = s.solver.CP
-        args['use_LP'] = s.solver.LP
+        args = args_from_solver(s.solver, args)
         return args
 
     def scenarios_to_output(self):
@@ -117,6 +83,95 @@ class ScenarioSpace:
         :return:
         """
         pass
+
+    def generate_statistics(self, error=1, model='P'):
+        print
+        print "Number of (valid) scenarios: %s" % len(self.scenarios)
+
+        match_by = [('model', model)]
+
+        leq=[('percent flow allocated incorrectly', error)]
+        d = filter(self.scenarios, match_by=match_by, leq=leq)
+        print "Number with error <=%s: %s" % (error,len(d.values()[0]))
+
+        group_by = ['sparse']
+        d = filter(self.scenarios, match_by=match_by, group_by=group_by, leq=leq)
+        print "Of those we have",
+        pprint([(dict(k),len(v)) for k,v in d.iteritems()])
+
+        group_by.append('solver')
+        d = filter(self.scenarios, match_by=match_by, group_by=group_by, leq=leq)
+        print "Of those we have",
+        pprint([(dict(k),len(v)) for k,v in d.iteritems()])
+
+        group_by = ['NCP', 'NLP', 'sparse']
+        if model == 'P':
+            group_by.extend(['nrow', 'ncol'])
+        d = filter(self.scenarios, match_by=match_by, group_by=group_by, leq=leq)
+        ntypes = len(d.keys())
+        print 'Number of comparison types: %s' % ntypes
+        undones = []
+        for (k,v) in d.iteritems():
+            params = [vv['params'] for vv in v]
+            undone = ScenarioSpace.generate_missing_solver_params(params)
+            undones.extend(undone)
+            dd = filter(v, group_by=['solver'])
+            solvers = get_stats(dd.itervalues(), lambda x: get_key(x, 'solver'),
+                                stat='first')
+            print dict(k), set(solvers)
+
+        dump(undones, 'scenarios_comparison.txt')
+
+
+    @staticmethod
+    def generate_missing_solver_params(params):
+        undone = []
+
+        intify = ['NB', 'NL', 'NS', 'NLP']
+        for p in params:
+            for pp in intify:
+                p[pp] = get_key({'params': p}, pp)
+                if pp in p:
+                    p[pp] = int(p[pp])
+            if 'trial' in p:
+                del p['trial']
+            if 'all_links' in p and p['model'] == 'P':
+                del p['all_links']
+            for k in ['use_L', 'use_CP', 'use_LP', 'use_OD']:
+                if k in p:
+                    del p[k]
+        fset = [frozenset(new_s(p).iteritems()) for p in params]
+
+        template = params[0].copy()
+        mask = ['method','init','sparse_BI']
+        for m in mask:
+            if m in template:
+                del template[m]
+        template = new_s(s=template)
+
+        solver_configs = [(('solver','LS'),('method','BB'),('init',True)),
+                          (('solver','LS'),('method','BB'),('init',False)),
+                          (('solver','BI'),('sparse_BI',True)),
+                          (('solver','BI'),('sparse_BI',False)),
+                          (('solver','CS'),('method','cvx_oracle')),
+                          (('solver','CS'),('method',
+                                    'cvx_random_sampling_L1_6000_replace')),
+                          ]
+        for sc in solver_configs:
+            done = False
+            temp = template.copy()
+            for (k,v) in sc:
+                temp[k] = v
+            ftemp = frozenset(temp.iteritems())
+            for f in fset:
+                if ftemp == f:
+                    done = True
+                    # print '[Done] %s' % temp
+                    break
+            if not done:
+                undone.append(temp)
+                # print '[Need to do]: %s' % temp
+        return undone
 
     def plot_size_vs_speed(self, init=False, sparse=True, stat='mean',
                            caption=None, error_leq=0.01, max_NLPCP=None,
@@ -317,10 +372,13 @@ class ScenarioSpace:
                 # if 'BI' in solvers:
                 #     print perflow_wrong, solvers, dd.keys(), len(dd.values())
                 if solvers.size >= 2:
-                    if dict(k)['nrow']*dict(k)['ncol'] <= 40:
-                        print 'Need to test for BI: NLP=%s NCP=%s (size = (%s,%s))' % \
-                              (dict(k)['NLP'], dict(k)['NCP'], dict(k)['nrow'],
-                               dict(k)['ncol'])
+                    # print '[%s=%s], %s = %s | %s' % (solvers.size,
+                    #     repr(solvers), len(v), repr([len(ddd) for ddd in dd.values()]),
+                    #     repr(k))
+                    # if dict(k)['nrow']*dict(k)['ncol'] <= 40:
+                    #     print 'Need to test for BI: NLP=%s NCP=%s (size = (%s,%s))' % \
+                    #           (dict(k)['NLP'], dict(k)['NCP'], dict(k)['nrow'],
+                    #            dict(k)['ncol'])
                     best_perflow, best_solver = \
                         min(zip(perflow_wrong, solvers), key=lambda x: x[0])
                     if best_perflow < error_leq:
@@ -397,6 +455,9 @@ class ScenarioSpace:
                     labels.append(label)
                     infos.append(info)
                     markers.append(marker)
+                else:
+                    # print 'Singleton: %s e=%s %s' % (solvers[0], perflow_wrong[0], repr(k))
+                    pass
 
             nrows = np.array(nrows)
             ncols = np.array(ncols)
@@ -426,14 +487,14 @@ class ScenarioSpace:
         geq = [('blocks_to_routes', b2n_geq)]
         group_by = ['NCP', 'NLP']
         match_by = [('model', model), ('sparse', sparse)]
-        group_by.append('use_L') if use_L is None else match_by.append(
-            ('use_L', use_L))
-        group_by.append('use_OD') if use_OD is None else match_by.append(
-            ('use_OD', use_OD))
-        group_by.append('use_CP') if use_CP is None else match_by.append(
-            ('use_CP', use_CP))
-        group_by.append('use_LP') if use_LP is None else match_by.append(
-            ('use_LP', use_LP))
+        # group_by.append('use_L') if use_L is None else match_by.append(
+        #     ('use_L', use_L))
+        # group_by.append('use_OD') if use_OD is None else match_by.append(
+        #     ('use_OD', use_OD))
+        # group_by.append('use_CP') if use_CP is None else match_by.append(
+        #     ('use_CP', use_CP))
+        # group_by.append('use_LP') if use_LP is None else match_by.append(
+        #     ('use_LP', use_LP))
         if model == 'P':
             group_by.extend(['nrow', 'ncol'])
 
@@ -464,10 +525,14 @@ class ScenarioSpace:
 
 if __name__ == "__main__":
     SS = ScenarioSpace(no_lsqr=True)
+    SS.load_output()
+    SS.generate_statistics(error=10)
     # SS.scenarios_to_output()
     SS.load_output()
-    SS.plot_solver_comparison(sparse=True, caption='', model='P', max_NLPCP=200,
-                          error_leq=0.1, error_leq2=0.3, error_leq3=0.5, b2n_leq=1.00, b2n_geq=0.00)
+    SS.plot_solver_comparison(sparse=True, caption='', model='P',
+                          error_leq=0.1, error_leq2=0.3, error_leq3=10, b2n_leq=10.00, b2n_geq=0.00)
+    SS.plot_solver_comparison(sparse=False, caption='', model='P',
+                              error_leq=0.1, error_leq2=0.3, error_leq3=10, b2n_leq=10.00, b2n_geq=0.00)
 
     # scenario_files = os.listdir(c.SCENARIO_DIR_NEW)
     # for sf in scenario_files:
