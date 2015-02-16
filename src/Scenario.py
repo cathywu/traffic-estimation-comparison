@@ -2,6 +2,7 @@ import ipdb
 import logging
 import random
 from pprint import pprint
+import cPickle as pickle
 
 import numpy as np
 
@@ -43,7 +44,6 @@ class Scenario:
     def _init_traffic_network(self,TN,fname_tn):
         if fname_tn is not None:
             self.fname_tn = fname_tn
-            import pickle
             if self.test:
                 fpath = '%s/test/%s' % (c.TN_DIR,fname_tn)
             else:
@@ -56,7 +56,6 @@ class Scenario:
     def _init_sensor_configuration(self,SC,fname_sc):
         if fname_sc is not None:
             self.fname_sc = fname_sc
-            import pickle
             if self.test:
                 fpath = '%s/test/%s' % (c.SC_DIR,fname_sc)
             else:
@@ -69,7 +68,6 @@ class Scenario:
     def _init_solver(self,solver,fname_solver):
         if fname_solver is not None:
             self.fname_solver = fname_solver
-            import pickle
             if self.test:
                 fpath = '%s/test/%s' % (c.SOLVER_DIR, fname_solver)
             else:
