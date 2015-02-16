@@ -33,6 +33,8 @@ mkdir data/solvers/test
 mkdir data/sensor_configurations/test
 mkdir data/networks/test
 mkdir data/scenarios/test
+
+mkdir output
 popd
 
 sudo yum install -y lapack lapack-devel blas blas-devel
