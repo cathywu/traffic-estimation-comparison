@@ -100,7 +100,8 @@ def load(fname=None):
     try:
         with open(fname) as f:
             return pickle.load(f)
-    except IOError:
+    except (IOError, ValueError):
+        print 'Error loading %s' % fname
         return None
 
 def save(x, fname=None, prefix=None):

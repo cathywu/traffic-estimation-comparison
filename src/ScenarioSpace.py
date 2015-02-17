@@ -525,14 +525,13 @@ class ScenarioSpace:
 
 if __name__ == "__main__":
     SS = ScenarioSpace(no_lsqr=True)
-    SS.load_output()
-    SS.generate_statistics(error=10)
-    # SS.scenarios_to_output()
-    SS.load_output()
-    SS.plot_solver_comparison(sparse=True, caption='', model='P',
-                          error_leq=0.1, error_leq2=0.3, error_leq3=10, b2n_leq=10.00, b2n_geq=0.00)
-    SS.plot_solver_comparison(sparse=False, caption='', model='P',
-                              error_leq=0.1, error_leq2=0.3, error_leq3=10, b2n_leq=10.00, b2n_geq=0.00)
+    # SS.load_output()
+    # SS.generate_statistics(error=10)
+    SS.scenarios_to_output()
+    # SS.plot_solver_comparison(sparse=True, caption='', model='P',
+    #                       error_leq=0.1, error_leq2=0.3, error_leq3=10, b2n_leq=10.00, b2n_geq=0.00)
+    # SS.plot_solver_comparison(sparse=False, caption='', model='P',
+    #                           error_leq=0.1, error_leq2=0.3, error_leq3=10, b2n_leq=10.00, b2n_geq=0.00)
 
     # scenario_files = os.listdir(c.SCENARIO_DIR_NEW)
     # for sf in scenario_files:

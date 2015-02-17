@@ -96,7 +96,7 @@ class Scenario:
             if type == 'small_graph_OD.mat':
                 TN = GridNetwork(nrow=self.args.nrow, ncol=self.args.ncol,
                                  nodroutes=self.args.nodroutes,
-                                 myseed=self.myseed, o_flow=1.0, nnz_oroutes=10)
+                                 myseed=self.myseed, o_flow=1.0)
             elif type == 'small_graph_OD_dense.mat':
                 TN = GridNetwork(nrow=self.args.nrow, ncol=self.args.ncol,
                                  nodroutes=self.args.nodroutes,
