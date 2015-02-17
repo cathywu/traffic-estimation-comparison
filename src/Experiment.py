@@ -132,7 +132,7 @@ class Experiment:
                                                ['solver', 'method', 'init',
                                                 'noise', 'eq', 'all_links',
                                                 'use_L', 'use_OD', 'use_CP',
-                                                'use_LP'])
+                                                'use_LP', 'sparse_BI'])
                 key = (fname_tn,fname_sc,fname_solver)
 
                 if fname_tn is None or fname_sc is None or fname_solver is None:
