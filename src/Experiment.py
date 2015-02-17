@@ -107,7 +107,7 @@ class Experiment:
                 param_keys[key] = params[key]
 
         for (args,fname) in args_list:
-            if frozenset(args) == frozenset(param_keys):
+            if frozenset(args.iteritems()) == frozenset(param_keys.iteritems()):
                 return fname
         return None
 
@@ -143,9 +143,12 @@ class Experiment:
                     print "Already done: %s" % params
                     continue
 
+                print 'Found job to do: %s' % params
+                args = argparse.Namespace()
+                args.__dict__ = params
                 self.s = Scenario(fname_tn=fname_tn, fname_sc=fname_sc,
-                              fname_solver=fname_solver, myseed=myseed,
-                              test=self.test)
+                                  fname_solver=fname_solver, myseed=myseed,
+                                  test=self.test, args=args)
 
                 logging.info('Running job')
                 p = Process(target=self.run_job)
@@ -202,16 +205,18 @@ if __name__ == "__main__":
     job_timeout = 9000
     njobs = 1000
 
-    e = Experiment(c.TN_DIR,c.SC_DIR,c.SOLVER_DIR,c.SCENARIO_DIR_NEW,
-                   scan_interval=scan_interval,
-                   sample_attempts=sample_attempts,job_timeout=job_timeout)
-
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--fname', dest='fname', type=str, default=None,
                         help='File with scenario configurations')
     args = parser.parse_args()
-    if args.fname is not None:
-        e.run_experiment_from_file(args.fname)
+    fname = args.fname
+
+    e = Experiment(c.TN_DIR,c.SC_DIR,c.SOLVER_DIR,c.SCENARIO_DIR_NEW,
+                   scan_interval=scan_interval,
+                   sample_attempts=sample_attempts,job_timeout=job_timeout)
+
+    if fname is not None:
+        e.run_experiment_from_file(fname)
     else:
         e.run_experiment(njobs)
