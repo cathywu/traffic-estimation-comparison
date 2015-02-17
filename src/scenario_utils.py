@@ -57,9 +57,14 @@ def args_from_solver(solver, args=None):
         args['solver'] = 'LSQR'
         args['damp'] = solver.damp
         args['eq'] = solver.eq
+        args['noise'] = 0.0
+        args['init'] = False
     elif solver.__class__.__name__ == 'SolverBI':
         args['solver'] = 'BI'
         args['sparse_BI'] = solver.sparse
+        args['noise'] = 0.0
+        args['eq'] = 'CP'
+        args['init'] = False
     elif solver.__class__.__name__ == 'SolverCS':
         args['solver'] = 'CS'
         args['noise'] = solver.noise
