@@ -71,21 +71,44 @@ def plot_solver_comparison(s, sparse=True, stat='mean',
                     marker = '^'
                 elif error_leq3 is not None and best_perflow < error_leq3:
                     marker = 'v'
-                nrow = get_stats(dd.itervalues(), lambda x: get_key(x,'nrow'), stat=stat)[0]
-                ncol = get_stats(dd.itervalues(), lambda x: get_key(x,'ncol'), stat=stat)[0]
+                else:
+                    continue
+                nrow = get_stats(dd.itervalues(), lambda x: get_key(x,'nrow'),
+                                 stat=stat)[0]
+                ncol = get_stats(dd.itervalues(), lambda x: get_key(x,'ncol'),
+                                 stat=stat)[0]
 
-                nroutes = get_stats(dd.itervalues(), lambda x: get_key(x,'nroutes'), stat=stat)
-                sparse = get_stats(dd.itervalues(), lambda x: get_key(x,'sparse'), stat='first')
-                blocks = get_stats(dd.itervalues(), lambda x: get_key(x,'blocks'), stat=stat)
-                NLP = get_stats(dd.itervalues(), lambda x: get_key(x,'NLP'), stat=stat)
-                NCP = get_stats(dd.itervalues(), lambda x: get_key(x,'NCP'), stat=stat)
-                nLconstraints = get_stats(dd.itervalues(), lambda x: get_key(x,'nLinks'), stat=stat)
-                nODconstraints = get_stats(dd.itervalues(), lambda x: get_key(x,'nOD'), stat=stat)
-                nLPconstraints = get_stats(dd.itervalues(), lambda x: get_key(x,'nLP'), stat=stat)
-                nCPconstraints = get_stats(dd.itervalues(), lambda x: get_key(x,'nCP'), stat=stat)
-                nTotalConstraints = get_stats(dd.itervalues(), lambda x: get_key(x,'nconstraints'), stat=stat)
-                nTotalSensors = get_stats(dd.itervalues(), lambda x: get_key(x,'nsensors'), stat=stat)
-                duration = get_stats(dd.itervalues(), lambda x: get_key(x,'duration'), stat=stat)
+                nroutes = get_stats(dd.itervalues(),
+                                    lambda x: get_key(x,'nroutes'), stat=stat)
+                sparse = get_stats(dd.itervalues(),
+                                   lambda x: get_key(x,'sparse'), stat='first')
+                blocks = get_stats(dd.itervalues(),
+                                   lambda x: get_key(x,'blocks'), stat=stat)
+                NLP = get_stats(dd.itervalues(), lambda x: get_key(x,'NLP'),
+                                stat=stat)
+                NCP = get_stats(dd.itervalues(), lambda x: get_key(x,'NCP'),
+                                stat=stat)
+                nLconstraints = get_stats(dd.itervalues(),
+                                          lambda x: get_key(x,'nLinks'),
+                                          stat=stat)
+                nODconstraints = get_stats(dd.itervalues(),
+                                           lambda x: get_key(x,'nOD'),
+                                           stat=stat)
+                nLPconstraints = get_stats(dd.itervalues(),
+                                           lambda x: get_key(x,'nLP'),
+                                           stat=stat)
+                nCPconstraints = get_stats(dd.itervalues(),
+                                           lambda x: get_key(x,'nCP'),
+                                           stat=stat)
+                nTotalConstraints = get_stats(dd.itervalues(),
+                                              lambda x: get_key(x,'nconstraints'),
+                                              stat=stat)
+                nTotalSensors = get_stats(dd.itervalues(),
+                                          lambda x: get_key(x,'nsensors'),
+                                          stat=stat)
+                duration = get_stats(dd.itervalues(),
+                                     lambda x: get_key(x,'duration'),
+                                     stat=stat)
                 note = [{'nL constraints': a, 'nOD constraints': b,
                          'nLP constraints': c, 'nCP constraints': e, 'NLP': f, 'NCP': g,
                          'blocks' : h, 'duration' : "{:.5f}".format(i),
