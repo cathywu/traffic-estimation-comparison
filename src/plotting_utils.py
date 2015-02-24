@@ -228,7 +228,7 @@ def _get_stat(l, f, stat='first'):
 
 
 def get_step(d, error=0.01, param='cum_times'):
-    if d['params']['solver'] == 'BI':
+    if d['params']['solver'] in ['BI','CS','LS']:
         return d['duration']
     for i in range(len(d['percent flow allocated incorrectly'])):
         if d['percent flow allocated incorrectly'][i] <= error:
@@ -246,7 +246,7 @@ def load_output(no_lsqr=False):
     files = os.listdir(c.RESULT_DIR)
     # files = ['output_Experiment.txt']
 
-    CS_methods = ['cvx_oracle', 'random_sampling_L1_6000_replace'] #, 'random_sampling_L1_30_replace']
+    CS_methods = ['cvx_oracle', 'random_sampling_L1_6000_replace', 'random_sampling_L1_30_replace']
     LS_methods = ['BB', 'LBFGS', 'DORE']
 
     scenarios = []
