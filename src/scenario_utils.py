@@ -86,7 +86,7 @@ class NumpyAwareJSONEncoder(json.JSONEncoder):
 
 def new_s(s=None):
     base_s = {'solver': 'LS', 'model': 'P', 'sparse': False, 'noise': 0.0,
-              'all_links': False, 'use_L': True, 'use_OD': True, 'use_CP': True,
+              'all_links': True, 'use_L': True, 'use_OD': True, 'use_CP': True,
               'use_LP': True, 'NLP': 0, 'NB': 0, 'NS': 0, 'NL': 0, 'eq': 'CP',
               'init': False, 'output': False}
     if s is None:
