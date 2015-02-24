@@ -106,8 +106,8 @@ class Experiment:
             if key in params:
                 param_keys[key] = params[key]
 
-        for (args,fname) in args_list:
-            if frozenset(args.iteritems()) == frozenset(param_keys.iteritems()):
+        for (arg,fname) in args_list:
+            if frozenset(arg.iteritems()) == frozenset(param_keys.iteritems()):
                 return fname
         return None
 
@@ -134,9 +134,13 @@ class Experiment:
                                                 'use_L', 'use_OD', 'use_CP',
                                                 'use_LP', 'sparse_BI'])
                 key = (fname_tn,fname_sc,fname_solver)
+                # if params['solver'] == 'LS':
+                #     print key
+                #     if key[-1] == None:
+                #         ipdb.set_trace()
 
                 if fname_tn is None or fname_sc is None or fname_solver is None:
-                    print "Scenario configuration not found: %s" % params
+                    # print "Scenario configuration not found: %s" % params
                     continue
 
                 if key in self.done:
