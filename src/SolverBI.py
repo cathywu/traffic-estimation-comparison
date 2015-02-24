@@ -11,7 +11,7 @@ from bayesian.grid_simulation import MCMC
 from scenario_utils import LS_postprocess
 
 class SolverBI(Solver):
-    def __init__(self, sparse=False, full=False, L=True, OD=True, CP=True, LP=True):
+    def __init__(self, sparse=False, full=True, L=True, OD=True, CP=True, LP=True):
         Solver.__init__(self)
 
         self.sparse = sparse

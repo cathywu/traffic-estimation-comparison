@@ -13,7 +13,7 @@ from scenario_utils import LS_postprocess
 
 
 class SolverCS(Solver):
-    def __init__(self, test='temp', full=False, L=True, OD=True, CP=True,
+    def __init__(self, test='temp', full=True, L=True, OD=True, CP=True,
                  LP=True, eq='CP', init=False, noise=0,
                  method='cvx_random_sampling_L1_30_replace'):
         Solver.__init__(self)
@@ -34,7 +34,7 @@ class SolverCS(Solver):
 
         # Test parameters
         # self.method = 'cvx_random_sampling_L1_30_replace'
-        self.method = 'cvx_random_sampling_L1_6000_replace'
+        self.method = method  # 'cvx_random_sampling_L1_6000_replace'
         # self.method = 'cvx_oracle'
         # alg = 'cvx_unconstrained_L1'
         # alg = 'cvx_L2'
