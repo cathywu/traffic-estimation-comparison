@@ -111,6 +111,7 @@ class ScenarioSpace:
         ntypes = len(d.keys())
         print 'Number of comparison types: %s' % ntypes
         undones = []
+        NCPs, NLPs = [], []
         for (k,v) in d.iteritems():
             params = [vv['params'] for vv in v]
             undone = ScenarioSpace.generate_missing_solver_params(params)
@@ -118,7 +119,13 @@ class ScenarioSpace:
             dd = filter(v, group_by=['solver'])
             solvers = get_stats(dd.itervalues(), lambda x: get_key(x, 'solver'),
                                 stat='first')
-            print dict(k), set(solvers)
+            NCPs.append(dict(k)['NCP'])
+            NLPs.append(dict(k)['NLP'])
+            if len(undone) > 0 and 'CS' not in set(solvers):
+                print dict(k), set(solvers)
+                # pprint(undone)
+        print 'NCPs', set(NCPs)
+        print 'NLPs', set(NLPs)
 
         dump(undones, 'scenarios_comparison.txt')
 
@@ -127,12 +134,14 @@ class ScenarioSpace:
     def generate_missing_solver_params(params):
         undone = []
 
-        intify = ['NB', 'NL', 'NS', 'NLP']
+        intify = ['NLP']
         for p in params:
+            p['NB'] = get_key({'params': p}, 'NB') + \
+                      get_key({'params': p}, 'NL') + \
+                      get_key({'params': p}, 'NS')
+            p['NL'], p['NS'] = 0, 0
             for pp in intify:
                 p[pp] = get_key({'params': p}, pp)
-                if pp in p:
-                    p[pp] = int(p[pp])
             if 'trial' in p:
                 del p['trial']
             if 'all_links' in p and p['model'] == 'P':
@@ -149,12 +158,12 @@ class ScenarioSpace:
                 del template[m]
         template = new_s(s=template)
 
-        solver_configs = [(('solver','LS'),('method','BB'),('init',True)),
-                          (('solver','LS'),('method','BB'),('init',False)),
-                          (('solver','BI'),('sparse_BI',True)),
-                          (('solver','BI'),('sparse_BI',False)),
-                          (('solver','CS'),('method','cvx_oracle')),
-                          (('solver','CS'),('method',
+        solver_configs = [(('solver','LS'), ('method','BB'), ('init',True)),
+                          (('solver','LS'), ('method','BB'), ('init',False)),
+                          (('solver','BI'), ('sparse_BI',True)),
+                          (('solver','BI'), ('sparse_BI',False)),
+                          (('solver','CS'), ('method','cvx_oracle')),
+                          (('solver','CS'), ('method',
                                     'cvx_random_sampling_L1_6000_replace')),
                           ]
         for sc in solver_configs:
@@ -173,15 +182,21 @@ class ScenarioSpace:
                 # print '[Need to do]: %s' % temp
         return undone
 
-    def plot_size_vs_speed(self, init=False, sparse=True, stat='mean',
+    def plot_size_vs_speed(self, stat='mean',
                            caption=None, error_leq=0.01, max_NLPCP=None,
                            model=None, disp=True, ylim=None, b2n_geq=0,
-                           b2n_leq=1):
+                           b2n_leq=1, solvers = ('LS', 'BI', 'LSQR', 'CS'),
+                           color_axis='b2n'):
+
 
         def plot1(s, title, stat='mean', marker='o', error_leq=0.01, ylim=None,
-                  colorbar=True):
+                  colorbar=True, color_axis='b2n'):
             nroutes = get_stats(s, lambda x: get_key(x, 'nroutes'), stat=stat)
             duration = get_stats(s, lambda x: get_key(x, 'duration'), stat=stat)
+            blocks_to_routes = get_stats(s,
+                                         lambda x: get_key(x,
+                                                           'blocks_to_routes'),
+                                         stat=stat)
             duration_leq_error = [get_step(x, error=error_leq,
                                            param='cum_times') for x in s]
 
@@ -206,7 +221,12 @@ class ScenarioSpace:
                                                        perflow_wrong)]
             info = s
 
-            colors = perflow_wrong
+            if color_axis == 'error':
+                colors = perflow_wrong
+            elif color_axis == 'b2n':
+                colors = blocks_to_routes
+            else:
+                return NotImplemented
             size = 2
             labels = [json.dumps(x, sort_keys=True, indent=4) for x in note]
 
@@ -218,7 +238,12 @@ class ScenarioSpace:
                 cb = plt.colorbar()
                 cb.set_alpha(1)
                 cb.draw_all()
-                cb.set_label('Error')
+                if color_axis == 'error':
+                    cb.set_label('% route flow error')
+                elif color_axis == 'b2n':
+                    cb.set_label('Blocks to routes')
+                else:
+                    return NotImplemented
 
             plt.title(title)
             plt.xlabel('Number of routes')
@@ -229,10 +254,9 @@ class ScenarioSpace:
                 plt.ylim(np.max([plt.ylim()[0]], 0), plt.ylim()[1])
             plt.xlim(np.max([0, plt.xlim()[0]]), plt.xlim()[1])
 
-        suptitle = "Size = fixed [solver=%s,model=%s,sparse=%s,init=%s,stat=%s,LP=^,CP=v]"
+        suptitle = "Size = fixed [solver=%s,model=%s,stat=%s,LP=^,CP=v]"
         title1 = 'Size vs speed'
 
-        solvers = ['LS', 'BI', 'LSQR', 'CS']
         markers = ['*', 'd', '+', 'x']
         leq = [('percent flow allocated incorrectly', error_leq),
                ('blocks_to_routes', b2n_leq)]
@@ -249,10 +273,11 @@ class ScenarioSpace:
             if len(d.keys()) > 0:
                 s = d.values()[0]
                 print '[%s (%s): %s]' % (solver, m, len(s)),
-                fig.suptitle("%s %s" % (suptitle % (solver, model, sparse, init,
+                fig.suptitle("%s %s" % (suptitle % (solver, model,
                                                     stat), caption), fontsize=8)
-                plot1(s, title1, stat=stat, marker=m,
-                      error_leq=error_leq, colorbar=False, ylim=ylim)
+                colorbar = True if m == '*' else False
+                plot1(s, title1, stat=stat, marker=m, error_leq=error_leq,
+                      colorbar=colorbar, ylim=ylim, color_axis=color_axis)
                 plt.hold(True)
         if disp:
             show()
@@ -261,10 +286,14 @@ class ScenarioSpace:
                                init=False, sparse=True, stat='mean',
                                caption=None, error_leq=0.01, max_NLPCP=None,
                                model=None, damp=0.0, disp=True, ylim=None,
-                               xlim=None):
+                               xlim=None, color_axis='b2n'):
 
-        def plot1(s, title, stat='mean', marker='o', ylim=None, colorbar=True):
+        def plot1(s, title, stat='mean', marker='o', ylim=None, colorbar=True,
+                  color_axis='error'):
             nroutes = get_stats(s, lambda x: get_key(x, 'nroutes'), stat=stat)
+            blocks_to_routes = get_stats(s, lambda x: get_key(x,
+                                                            'blocks_to_routes'),
+                                         stat=stat)
             nrows = get_stats(s, lambda x: get_key(x, 'nrow'), stat=stat)
             ncols = get_stats(s, lambda x: get_key(x, 'ncol'), stat=stat)
             sparsity = [nrow * ncol * 2 / nroute for (nrow, ncol, nroute) in
@@ -280,7 +309,7 @@ class ScenarioSpace:
                                        stat=stat)
 
             perflow_wrong = get_stats(s, lambda x: get_key(x, 'perflow'),
-                                      stat=stat)
+                                      stat='min')
 
             note = [{'nLP constraints': a, 'nCP constraints': b, 'NLP': k,
                      'NCP': e, 'blocks': f, 'duration': "{:.5f}".format(g),
@@ -292,7 +321,12 @@ class ScenarioSpace:
                                                        perflow_wrong)]
             info = s
 
-            colors = blocks / nroutes
+            if color_axis == 'error':
+                colors = perflow_wrong
+            elif color_axis == 'b2n':
+                colors = blocks_to_routes
+            else:
+                return NotImplemented
             size = 2
             labels = [json.dumps(x, sort_keys=True, indent=4) for x in note]
 
@@ -304,7 +338,12 @@ class ScenarioSpace:
                 cb = plt.colorbar()
                 cb.set_alpha(1)
                 cb.draw_all()
-                cb.set_label('Blocks / nroutes')
+                if color_axis == 'error':
+                    cb.set_label('% route flow error')
+                elif color_axis == 'b2n':
+                    cb.set_label('Blocks / nroutes')
+                else:
+                    return NotImplemented
 
             plt.title(title)
             plt.xlabel('Sparsity (percent)')
@@ -319,7 +358,7 @@ class ScenarioSpace:
                 plt.xlim(np.max([0, plt.xlim()[0]]), plt.xlim()[1])
 
         suptitle = "Size = fixed [solver=%s,model=%s,sparse=%s,init=%s,stat=%s,LP=^,CP=v]"
-        title1 = 'Size vs speed'
+        title1 = 'Sparsity vs route flow error'
 
         markers = ['*', 'd', '+', 'x']
         leq = [('percent flow allocated incorrectly', error_leq)]
@@ -331,7 +370,7 @@ class ScenarioSpace:
             if max_NLPCP is not None:
                 leq.append(('NLPCP', max_NLPCP))
 
-            d = filter(self.scenarios_v2, match_by=match_by, leq=leq, geq=geq)
+            d = filter(self.scenarios, match_by=match_by, leq=leq, geq=geq)
             if len(d.keys()) > 0:
                 s = d.values()[0]
                 print '[%s (%s): %s]' % (solver, m, len(s)),
@@ -339,7 +378,7 @@ class ScenarioSpace:
                                                     stat), caption), fontsize=8)
                 colorbar = True if m == '*' else False
                 plot1(s, title1, stat=stat, marker=m, colorbar=colorbar,
-                      ylim=ylim)
+                      ylim=ylim, color_axis=color_axis)
                 plt.hold(True)
         if disp:
             plt.hold(False)
@@ -360,121 +399,125 @@ class ScenarioSpace:
             # size: actual # of sensors (including ODs)
             import random
 
-            nrows, ncols, colors, labels, infos, markers = [], [], [], [], [], []
-            for (k, v) in d.iteritems():
-                dd = filter(v, group_by=['solver'])
-                solvers = get_stats(dd.itervalues(),
-                                    lambda x: get_key(x, 'solver'),
-                                    stat='first')
-                perflow_wrong = get_stats(dd.itervalues(),
-                                          lambda x: get_key(x, 'perflow'),
-                                          stat=stat)
-                # if 'BI' in solvers:
-                #     print perflow_wrong, solvers, dd.keys(), len(dd.values())
-                if solvers.size >= 2:
-                    # print '[%s=%s], %s = %s | %s' % (solvers.size,
-                    #     repr(solvers), len(v), repr([len(ddd) for ddd in dd.values()]),
-                    #     repr(k))
-                    # if dict(k)['nrow']*dict(k)['ncol'] <= 40:
-                    #     print 'Need to test for BI: NLP=%s NCP=%s (size = (%s,%s))' % \
-                    #           (dict(k)['NLP'], dict(k)['NCP'], dict(k)['nrow'],
-                    #            dict(k)['ncol'])
-                    best_perflow, best_solver = \
-                        min(zip(perflow_wrong, solvers), key=lambda x: x[0])
-                    if best_perflow < error_leq:
-                        marker = 'o'
-                    elif error_leq2 is not None and best_perflow < error_leq2:
-                        marker = '^'
-                    elif error_leq3 is not None and best_perflow < error_leq3:
-                        marker = 'v'
-                    else:
-                        continue
-                    nrow = get_stats(dd.itervalues(),
-                                     lambda x: get_key(x, 'nrow'), stat=stat)[0]
-                    ncol = get_stats(dd.itervalues(),
-                                     lambda x: get_key(x, 'ncol'), stat=stat)[0]
+            solver_sizes = [2,3] # [1,2,3]
+            marker_sizes = [1,4] # [0.25,2,6]
+            for (size,msize) in zip(solver_sizes,marker_sizes):
+                nrows, ncols, colors, labels, infos, markers = [], [], [], [], [], []
+                for (k, v) in d.iteritems():
+                    dd = filter(v, group_by=['solver'])
+                    solvers = get_stats(dd.itervalues(),
+                                        lambda x: get_key(x, 'solver'),
+                                        stat='first')
+                    perflow_wrong = get_stats(dd.itervalues(),
+                                              lambda x: get_key(x, 'perflow'),
+                                              stat='min')
+                    # if 'BI' in solvers:
+                    #     print perflow_wrong, solvers, dd.keys(), len(dd.values())
+                    if solvers.size == size:
+                        if solvers.size == 2:
+                            print '[%s=%s], %s = %s | %s' % (solvers.size,
+                                repr(solvers), len(v), repr([len(ddd) for ddd in dd.values()]),
+                                repr(k))
+                        # if dict(k)['nrow']*dict(k)['ncol'] <= 40:
+                        #     print 'Need to test for BI: NLP=%s NCP=%s (size = (%s,%s))' % \
+                        #           (dict(k)['NLP'], dict(k)['NCP'], dict(k)['nrow'],
+                        #            dict(k)['ncol'])
+                        best_perflow, best_solver = \
+                            min(zip(perflow_wrong, solvers), key=lambda x: x[0])
+                        if best_perflow < error_leq:
+                            marker = 'o'
+                        elif error_leq2 is not None and best_perflow < error_leq2:
+                            marker = '^'
+                        elif error_leq3 is not None and best_perflow < error_leq3:
+                            marker = 'v'
+                        else:
+                            continue
+                        nrow = get_stats(dd.itervalues(),
+                                         lambda x: get_key(x, 'nrow'), stat=stat)[0]
+                        ncol = get_stats(dd.itervalues(),
+                                         lambda x: get_key(x, 'ncol'), stat=stat)[0]
 
-                    nroutes = get_stats(dd.itervalues(),
-                                        lambda x: get_key(x, 'nroutes'),
-                                        stat=stat)
-                    sparse = get_stats(dd.itervalues(),
-                                       lambda x: get_key(x, 'sparse'),
-                                       stat='first')
-                    blocks = get_stats(dd.itervalues(),
-                                       lambda x: get_key(x, 'blocks'),
-                                       stat=stat)
-                    NLP = get_stats(dd.itervalues(),
-                                    lambda x: get_key(x, 'NLP'), stat=stat)
-                    NCP = get_stats(dd.itervalues(),
-                                    lambda x: get_key(x, 'NCP'), stat=stat)
-                    nLconstraints = get_stats(dd.itervalues(),
-                                              lambda x: get_key(x, 'nLinks'),
-                                              stat=stat)
-                    nODconstraints = get_stats(dd.itervalues(),
-                                               lambda x: get_key(x, 'nOD'),
-                                               stat=stat)
-                    nLPconstraints = get_stats(dd.itervalues(),
-                                               lambda x: get_key(x, 'nLP'),
-                                               stat=stat)
-                    nCPconstraints = get_stats(dd.itervalues(),
-                                               lambda x: get_key(x, 'nCP'),
-                                               stat=stat)
-                    nTotalConstraints = get_stats(dd.itervalues(),
-                                                  lambda x: get_key(x,
-                                                                    'nconstraints'),
+                        nroutes = get_stats(dd.itervalues(),
+                                            lambda x: get_key(x, 'nroutes'),
+                                            stat=stat)
+                        sparse = get_stats(dd.itervalues(),
+                                           lambda x: get_key(x, 'sparse'),
+                                           stat='first')
+                        blocks = get_stats(dd.itervalues(),
+                                           lambda x: get_key(x, 'blocks'),
+                                           stat=stat)
+                        NLP = get_stats(dd.itervalues(),
+                                        lambda x: get_key(x, 'NLP'), stat=stat)
+                        NCP = get_stats(dd.itervalues(),
+                                        lambda x: get_key(x, 'NCP'), stat=stat)
+                        nLconstraints = get_stats(dd.itervalues(),
+                                                  lambda x: get_key(x, 'nLinks'),
                                                   stat=stat)
-                    nTotalSensors = get_stats(dd.itervalues(),
-                                              lambda x: get_key(x, 'nsensors'),
-                                              stat=stat)
-                    duration = get_stats(dd.itervalues(),
-                                         lambda x: get_key(x, 'duration'),
-                                         stat=stat)
-                    note = [{'nL constraints': a, 'nOD constraints': b,
-                             'nLP constraints': c, 'nCP constraints': e,
-                             'NLP': f, 'NCP': g, 'blocks': h,
-                             'duration': "{:.5f}".format(i),
-                             'perflow wrong': "{:.5f}".format(j),
-                             'total constraints': k,
-                             'total sensors': l, 'nroutes': "%s" % (m),
-                            } for (a, b, c, e, f, g, h, i, j, k, l, m) in
-                            zip(nLconstraints,
-                                nODconstraints, nLPconstraints, nCPconstraints,
-                                NLP,
-                                NCP, blocks, duration, perflow_wrong,
-                                nTotalConstraints,
-                                nTotalSensors, nroutes)]
-                    info = dd.values()[0]
-                    # print nroutes, blocks
+                        nODconstraints = get_stats(dd.itervalues(),
+                                                   lambda x: get_key(x, 'nOD'),
+                                                   stat=stat)
+                        nLPconstraints = get_stats(dd.itervalues(),
+                                                   lambda x: get_key(x, 'nLP'),
+                                                   stat=stat)
+                        nCPconstraints = get_stats(dd.itervalues(),
+                                                   lambda x: get_key(x, 'nCP'),
+                                                   stat=stat)
+                        nTotalConstraints = get_stats(dd.itervalues(),
+                                                      lambda x: get_key(x,
+                                                                        'nconstraints'),
+                                                      stat=stat)
+                        nTotalSensors = get_stats(dd.itervalues(),
+                                                  lambda x: get_key(x, 'nsensors'),
+                                                  stat=stat)
+                        duration = get_stats(dd.itervalues(),
+                                             lambda x: get_key(x, 'duration'),
+                                             stat=stat)
+                        note = [{'nL constraints': a, 'nOD constraints': b,
+                                 'nLP constraints': c, 'nCP constraints': e,
+                                 'NLP': f, 'NCP': g, 'blocks': h,
+                                 'duration': "{:.5f}".format(i),
+                                 'perflow wrong': "{:.5f}".format(j),
+                                 'total constraints': k,
+                                 'total sensors': l, 'nroutes': "%s" % (m),
+                                } for (a, b, c, e, f, g, h, i, j, k, l, m) in
+                                zip(nLconstraints,
+                                    nODconstraints, nLPconstraints, nCPconstraints,
+                                    NLP,
+                                    NCP, blocks, duration, perflow_wrong,
+                                    nTotalConstraints,
+                                    nTotalSensors, nroutes)]
+                        info = dd.values()[0]
+                        # print nroutes, blocks
 
-                    # max_size = np.max(nTotalSensors)
-                    size = 2  # 40/max_size * nTotalSensors
-                    label = json.dumps(note[0], sort_keys=True, indent=4)
-                    nrows.append(nrow + random.random() - 0.5)
-                    ncols.append(ncol + random.random() - 0.5)
-                    colors.append(color_map[best_solver])
-                    labels.append(label)
-                    infos.append(info)
-                    markers.append(marker)
-                else:
-                    # print 'Singleton: %s e=%s %s' % (solvers[0], perflow_wrong[0], repr(k))
-                    pass
+                        # max_size = np.max(nTotalSensors)
+                        label = json.dumps(note[0], sort_keys=True, indent=4)
+                        nrows.append(nrow + random.random() - 0.5)
+                        ncols.append(ncol + random.random() - 0.5)
+                        colors.append(color_map[best_solver])
+                        labels.append(label)
+                        infos.append(info)
+                        markers.append(marker)
+                    else:
+                        # print 'Singleton: %s e=%s %s' % (solvers[0], perflow_wrong[0], repr(k))
+                        pass
 
-            nrows = np.array(nrows)
-            ncols = np.array(ncols)
-            colors = np.array(colors)
+                nrows = np.array(nrows)
+                ncols = np.array(ncols)
+                colors = np.array(colors)
 
-            # CAUTION plotting nroutes vs accuracy will be weird because
-            # LSQR considers all routes, whereas the other methods consider
-            # an abridged set based on the EQ constraint
-            for m in ['o', '^', 'v']:
-                idx = np.array([i for (i, x) in enumerate(markers) if x == m])
-                if idx.size == 0:
-                    continue
-                curr_labels = [labels[i] for i in idx]
-                curr_info = [infos[i] for i in idx]
-                plot_scatter(nrows[idx], ncols[idx], c=colors[idx], s=size,
-                             label=curr_labels, info=curr_info,
-                             alpha=0.2, marker=m)
+                # CAUTION plotting nroutes vs accuracy will be weird because
+                # LSQR considers all routes, whereas the other methods consider
+                # an abridged set based on the EQ constraint
+                for m in ['o', '^', 'v']:
+                    idx = np.array([i for (i, x) in enumerate(markers) if x == m])
+                    if idx.size == 0:
+                        continue
+                    curr_labels = [labels[i] for i in idx]
+                    curr_info = [infos[i] for i in idx]
+                    plot_scatter(nrows[idx], ncols[idx], c=colors[idx], s=msize,
+                                 label=curr_labels, info=curr_info,
+                                 alpha=0.2, marker=m)
+                plt.hold(True)
 
             plt.title(title)
             plt.xlabel('Number of rows in the grid network')
@@ -525,13 +568,9 @@ class ScenarioSpace:
 
 if __name__ == "__main__":
     SS = ScenarioSpace(no_lsqr=True)
+    SS.scenarios_to_output()
     # SS.load_output()
     # SS.generate_statistics(error=10)
-    SS.scenarios_to_output()
-    # SS.plot_solver_comparison(sparse=True, caption='', model='P',
-    #                       error_leq=0.1, error_leq2=0.3, error_leq3=10, b2n_leq=10.00, b2n_geq=0.00)
-    # SS.plot_solver_comparison(sparse=False, caption='', model='P',
-    #                           error_leq=0.1, error_leq2=0.3, error_leq3=10, b2n_leq=10.00, b2n_geq=0.00)
 
     # scenario_files = os.listdir(c.SCENARIO_DIR_NEW)
     # for sf in scenario_files:
