@@ -8,7 +8,7 @@ pushd comparison
 git stash
 popd
 
-for repo in comparison synthetic_traffic BSC_NNLS bayesian
+for repo in comparison synthetic_traffic BSLS bayesian
 do
     pushd $repo
     echo "$repo"

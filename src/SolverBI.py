@@ -3,7 +3,7 @@ import logging
 
 import config as c
 from Solver import Solver
-from BSC_NNLS.python.util import solver_input
+from BSLS.python.util import solver_input
 from bayesian.grid_model import create_model
 from bayesian.grid_simulation import MCMC
 

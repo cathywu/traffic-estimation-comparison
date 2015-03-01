@@ -12,7 +12,7 @@ pushd traffic-estimation
 touch __init__.py
 git clone https://github.com/megacell/traffic-estimation-comparison comparison
 git clone https://github.com/megacell/synthetic-traffic synthetic_traffic
-git clone https://github.com/megacell/BSC-NNLS BSC_NNLS
+git clone https://github.com/megacell/block-simplex-least-squares BSLS
 git clone https://github.com/megacell/traffic-estimation-bayesian bayesian
 popd
 
@@ -47,7 +47,7 @@ yes | sudo yum install ncurses-devel
 pip install readline
 
 # Setup specific to traffic-estimation
-pushd traffic-estimation/BSC_NNLS/python/c_extensions
+pushd traffic-estimation/BSLS/python/c_extensions
 python setup.py build_ext --inplace
 popd
 

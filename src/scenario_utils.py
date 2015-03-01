@@ -4,6 +4,7 @@ import logging
 import time
 from random import randint
 import cPickle as pickle
+from cPickle import BadPickleGet
 import json
 
 import numpy as np
@@ -11,9 +12,9 @@ import numpy.linalg as la
 import matplotlib.pyplot as plt
 
 import config as c
-from BSC_NNLS.python import util
-from BSC_NNLS.python.c_extensions.simplex_projection import simplex_projection
-from BSC_NNLS.python import BB, LBFGS, DORE, solvers
+from BSLS.python import util
+from BSLS.python.c_extensions.simplex_projection import simplex_projection
+from BSLS.python import BB, LBFGS, DORE, solvers
 
 def args_from_TN(TN, args=None):
     # TrafficNetwork args
@@ -100,7 +101,7 @@ def load(fname=None):
     try:
         with open(fname) as f:
             return pickle.load(f)
-    except (IOError, ValueError):
+    except (IOError, ValueError, BadPickleGet):
         print 'Error loading %s' % fname
         return None
 

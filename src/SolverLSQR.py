@@ -2,7 +2,7 @@ import time
 
 import config as c
 from Solver import Solver
-from BSC_NNLS.python.util import load_raw
+from BSLS.python.util import load_raw
 from scipy.sparse.linalg import lsqr
 
 # FIXME temporary hack

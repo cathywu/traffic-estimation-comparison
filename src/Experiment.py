@@ -3,6 +3,7 @@ import ipdb
 import logging
 import os
 import cPickle as pickle
+from cPickle import BadPickleGet
 import random
 from multiprocessing import Process
 import json
@@ -55,7 +56,7 @@ class Experiment:
                         self.done[key] += 1
                     else:
                         self.done[key] = 1
-                except EOFError:
+                except (EOFError, BadPickleGet):
                     print 'Could not load, please delete: %s' % filename
         logging.info('Scan done')
 
