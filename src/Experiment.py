@@ -56,7 +56,7 @@ class Experiment:
                         self.done[key] += 1
                     else:
                         self.done[key] = 1
-                except (EOFError, BadPickleGet):
+                except (EOFError, BadPickleGet, ValueError):
                     print 'Could not load, please delete: %s' % filename
         logging.info('Scan done')
 
@@ -112,7 +112,7 @@ class Experiment:
                 return fname
         return None
 
-    def run_experiment_from_file(self,fname):
+    def run_experiment_from_file(self, fname, runone=False):
         myseed = 2347234328
         TNs = Experiment.get_available(self.tns, c.TN_DIR, args_from_TN)
         SCs = Experiment.get_available(self.scs, c.SC_DIR, args_from_SC)
@@ -156,18 +156,23 @@ class Experiment:
                                   test=self.test, args=args)
 
                 logging.info('Running job')
-                p = Process(target=self.run_job)
-                p.start()
-                p.join(self.job_timeout)
-                if p.is_alive():
-                    logging.error("Error (timeout): terminating job %s" % repr(key))
-                    # Terminate
-                    p.terminate()
-                    p.join()
-                    self.long[key] = 0
-                    self.save_long()
-                else:
+                if runone is True:
+                    logging.info('Debug mode: Running with disabled timeouts')
+                    self.run_job()
                     self.done[key] = 1
+                else:
+                    p = Process(target=self.run_job)
+                    p.start()
+                    p.join(self.job_timeout)
+                    if p.is_alive():
+                        logging.error("Error (timeout): terminating job %s" % repr(key))
+                        # Terminate
+                        p.terminate()
+                        p.join()
+                        self.long[key] = 0
+                        self.save_long()
+                    else:
+                        self.done[key] = 1
 
                 # Occasionally update the set of finished tests
                 if i > 0 and i % self.scan_interval == 0:
@@ -214,14 +219,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--fname', dest='fname', type=str, default=None,
                         help='File with scenario configurations')
+    parser.add_argument('--runone', dest='runone', default=False,
+                        action='store_true',
+                        help='For debugging, disable the timeout')
     args = parser.parse_args()
     fname = args.fname
+    runone = args.runone
 
     e = Experiment(c.TN_DIR,c.SC_DIR,c.SOLVER_DIR,c.SCENARIO_DIR_NEW,
                    scan_interval=scan_interval,
                    sample_attempts=sample_attempts,job_timeout=job_timeout)
 
     if fname is not None:
-        e.run_experiment_from_file(fname)
+        e.run_experiment_from_file(fname, runone=runone)
     else:
         e.run_experiment(njobs)
