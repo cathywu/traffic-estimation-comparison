@@ -57,15 +57,18 @@ class SolverCS(Solver):
             self.fname = '%s/%s' % (c.DATA_DIR, self.test)
             from python.util import solver_input, load_data
             self.A, self.b, self.N, self.block_sizes, self.x_true, self.nz,\
-                self.flow, self.rsort_index, self.x0, out = \
+                self.flow, self.rsort_index, self.x0, out, self.EQ = \
                 load_data(self.fname, full=self.full, L=self.L, OD=self.OD,
-                          CP=self.CP, LP=self.LP, eq=self.eq, init=self.init)
+                          CP=self.CP, LP=self.LP, eq=self.eq, init=self.init,
+                          return_EQ=True)
         else:
             from python.util import solver_input, load_data
             self.A, self.b, self.N, self.block_sizes, self.x_true, self.nz, \
-                self.flow, self.rsort_index, self.x0, out = \
+                self.flow, self.rsort_index, self.x0, out, self.EQ = \
                 solver_input(data, full=self.full, L=self.L, OD=self.OD,
-                         CP=self.CP, LP=self.LP, eq=self.eq, init=self.init)
+                         CP=self.CP, LP=self.LP, eq=self.eq, init=self.init,
+                         return_EQ=True)
+        assert np.linalg.norm(self.EQ.dot(self.x_true) - np.ones(self.EQ.shape[0])) < 1e-10, 'Ux!=1'
         init_time = time.time() - init_time
         self.output = out
         self.output['init_time'] = init_time
@@ -83,13 +86,15 @@ class SolverCS(Solver):
 
         self.fname = '%s/CS_%s' % (c.DATA_DIR, self.test)
         try:
+            assert np.linalg.norm(self.A.dot(self.x_true)-self.b) <= 1e-6, 'Ax!=b'
             scipy.io.savemat(self.fname, { 'A': self.A, 'b': self.b,
                                       'x_true': self.x_true, 'flow': self.flow,
-                                      'x0': self.x0, 'block_sizes': self.block_sizes},
+                                      'x0': self.x0, 'U': self.EQ,
+                                      'block_sizes': self.block_sizes},
                              oned_as='column')
         except TypeError:
             pprint({ 'A': self.A, 'b': self.b, 'x_true': self.x_true,
-                     'flow': self.flow, 'x0': self.x0,
+                     'flow': self.flow, 'x0': self.x0, 'U': self.EQ,
                      'block_sizes': self.block_sizes })
             self.output['error'] = 'Problem saving matrices, likely A is empty'
             return
