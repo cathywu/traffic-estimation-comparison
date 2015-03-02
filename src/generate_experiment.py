@@ -135,12 +135,14 @@ def solvers(BI=False, LS=False, CS=False, LSQR=False, LS2=False, CS2=False,
 
 
 def experiment(BI=False, LS=False, CS=False, LSQR=False, LS2=False, CS2=False,
-               LSQR2=False):
+               LSQR2=False, networks=False, sensors=False):
     myseed = 2347234328
-    # grid_networks_all(myseed=myseed)
-    # grid_networks_small_enough(myseed=myseed)
-    # UE_networks()
-    # sensor_configurations_small_enough(myseed=myseed)
+    if networks:
+        # grid_networks_all(myseed=myseed)
+        grid_networks_small_enough(myseed=myseed)
+        # UE_networks()
+    if sensors:
+        sensor_configurations_small_enough(myseed=myseed)
     solvers(BI=BI, LS=LS, CS=CS, LSQR=LSQR, LS2=LS2, CS2=CS2, LSQR2=LSQR2)
 
 if __name__ == "__main__":
@@ -148,6 +150,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--solver', dest='solver', type=str, default='LS',
                         help='Solver to seed experiment')
+    parser.add_argument('--sensors', dest='sensors', default=False,
+                        action='store_true',
+                        help='Toggle to generate sensor configurations')
+    parser.add_argument('--networks', dest='networks', default=False,
+                        action='store_true', help='Toggle to generate networks')
+
     args = parser.parse_args()
     if args.solver == 'LS':
         experiment(LS=True)
