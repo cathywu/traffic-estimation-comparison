@@ -416,8 +416,8 @@ class ScenarioSpace:
                     if solvers.size == size:
                         if solvers.size == 2:
                             print '[%s=%s], %s = %s | %s' % (solvers.size,
-                                repr(solvers), len(v), repr([len(ddd) for ddd in dd.values()]),
-                                repr(k))
+                                                             repr(solvers), len(v), repr([len(ddd) for ddd in dd.values()]),
+                                                             repr(k))
                         # if dict(k)['nrow']*dict(k)['ncol'] <= 40:
                         #     print 'Need to test for BI: NLP=%s NCP=%s (size = (%s,%s))' % \
                         #           (dict(k)['NLP'], dict(k)['NCP'], dict(k)['nrow'],
@@ -479,7 +479,7 @@ class ScenarioSpace:
                                  'perflow wrong': "{:.5f}".format(j),
                                  'total constraints': k,
                                  'total sensors': l, 'nroutes': "%s" % (m),
-                                } for (a, b, c, e, f, g, h, i, j, k, l, m) in
+                                 } for (a, b, c, e, f, g, h, i, j, k, l, m) in
                                 zip(nLconstraints,
                                     nODconstraints, nLPconstraints, nCPconstraints,
                                     NLP,
@@ -565,12 +565,184 @@ class ScenarioSpace:
         if disp:
             show()
 
+    def plot_solver_vs_size(self, sparse=True, stat='mean', caption=None,
+                            error_leq=1.0, error_leq2=None, error_leq3=None,
+                            max_NLPCP=None, model='P', disp=True, use_L=None,
+                            use_OD=None, use_CP=None, use_LP=None, b2n_geq=0,
+                            b2n_leq=1):
+
+        def plot1(d, title, color_map=None, stat='mean', error_leq=1.0,
+                  error_leq2=None,
+                  error_leq3=None):
+            # plot nroutes vs nconstraints needed to achieve accuracy
+            # color: sensor config?
+            # size: actual # of sensors (including ODs)
+            import random
+
+            solver_sizes = [2,3] # [1,2,3]
+            marker_sizes = [1,4] # [0.25,2,6]
+            for (size,msize) in zip(solver_sizes,marker_sizes):
+                nrows, ncols, colors, labels, infos, markers = [], [], [], [], [], []
+                for (k, v) in d.iteritems():
+                    dd = filter(v, group_by=['solver'])
+                    solvers = get_stats(dd.itervalues(),
+                                        lambda x: get_key(x, 'solver'),
+                                        stat='first')
+                    perflow_wrong = get_stats(dd.itervalues(),
+                                              lambda x: get_key(x, 'perflow'),
+                                              stat='min')
+                    # if 'BI' in solvers:
+                    #     print perflow_wrong, solvers, dd.keys(), len(dd.values())
+                    if solvers.size == size:
+                        if solvers.size == 2:
+                            print '[%s=%s], %s = %s | %s' % (solvers.size,
+                                repr(solvers), len(v), repr([len(ddd) for ddd in dd.values()]),
+                                repr(k))
+                        # if dict(k)['nrow']*dict(k)['ncol'] <= 40:
+                        #     print 'Need to test for BI: NLP=%s NCP=%s (size = (%s,%s))' % \
+                        #           (dict(k)['NLP'], dict(k)['NCP'], dict(k)['nrow'],
+                        #            dict(k)['ncol'])
+                        best_perflow, best_solver = \
+                            min(zip(perflow_wrong, solvers), key=lambda x: x[0])
+                        if best_perflow < error_leq:
+                            marker = 'o'
+                        elif error_leq2 is not None and best_perflow < error_leq2:
+                            marker = '^'
+                        elif error_leq3 is not None and best_perflow < error_leq3:
+                            marker = 'v'
+                        else:
+                            continue
+                        nrow = get_stats(dd.itervalues(),
+                                         lambda x: get_key(x, 'nrow'), stat=stat)[0]
+                        ncol = get_stats(dd.itervalues(),
+                                         lambda x: get_key(x, 'ncol'), stat=stat)[0]
+
+                        nroutes = get_stats(dd.itervalues(),
+                                            lambda x: get_key(x, 'nroutes'),
+                                            stat=stat)
+                        sparse = get_stats(dd.itervalues(),
+                                           lambda x: get_key(x, 'sparse'),
+                                           stat='first')
+                        blocks = get_stats(dd.itervalues(),
+                                           lambda x: get_key(x, 'blocks'),
+                                           stat=stat)
+                        NLP = get_stats(dd.itervalues(),
+                                        lambda x: get_key(x, 'NLP'), stat=stat)
+                        NCP = get_stats(dd.itervalues(),
+                                        lambda x: get_key(x, 'NCP'), stat=stat)
+                        nLconstraints = get_stats(dd.itervalues(),
+                                                  lambda x: get_key(x, 'nLinks'),
+                                                  stat=stat)
+                        nODconstraints = get_stats(dd.itervalues(),
+                                                   lambda x: get_key(x, 'nOD'),
+                                                   stat=stat)
+                        nLPconstraints = get_stats(dd.itervalues(),
+                                                   lambda x: get_key(x, 'nLP'),
+                                                   stat=stat)
+                        nCPconstraints = get_stats(dd.itervalues(),
+                                                   lambda x: get_key(x, 'nCP'),
+                                                   stat=stat)
+                        nTotalConstraints = get_stats(dd.itervalues(),
+                                                      lambda x: get_key(x,
+                                                                        'nconstraints'),
+                                                      stat=stat)
+                        nTotalSensors = get_stats(dd.itervalues(),
+                                                  lambda x: get_key(x, 'nsensors'),
+                                                  stat=stat)
+                        duration = get_stats(dd.itervalues(),
+                                             lambda x: get_key(x, 'duration'),
+                                             stat=stat)
+                        note = [{'nL constraints': a, 'nOD constraints': b,
+                                 'nLP constraints': c, 'nCP constraints': e,
+                                 'NLP': f, 'NCP': g, 'blocks': h,
+                                 'duration': "{:.5f}".format(i),
+                                 'perflow wrong': "{:.5f}".format(j),
+                                 'total constraints': k,
+                                 'total sensors': l, 'nroutes': "%s" % (m),
+                                } for (a, b, c, e, f, g, h, i, j, k, l, m) in
+                                zip(nLconstraints,
+                                    nODconstraints, nLPconstraints, nCPconstraints,
+                                    NLP,
+                                    NCP, blocks, duration, perflow_wrong,
+                                    nTotalConstraints,
+                                    nTotalSensors, nroutes)]
+                        info = dd.values()[0]
+                        # print nroutes, blocks
+
+                        # max_size = np.max(nTotalSensors)
+                        label = json.dumps(note[0], sort_keys=True, indent=4)
+                        nrows.append(nrow + random.random() - 0.5)
+                        ncols.append(ncol + random.random() - 0.5)
+                        colors.append(color_map[best_solver])
+                        labels.append(label)
+                        infos.append(info)
+                        markers.append(marker)
+                        for nroute, route_err, solver in zip(nroutes, perflow_wrong, solvers):
+                            plot_scatter(nroute, route_err,
+                                         c=color_map[solver], s=msize,
+                                         label=None, info=None, alpha=0.2,
+                                         marker=marker)
+                            plt.hold(True)
+                    else:
+                        # print 'Singleton: %s e=%s %s' % (solvers[0], perflow_wrong[0], repr(k))
+                        pass
+
+
+            plt.title(title)
+            plt.xlabel('Number of rows in the grid network')
+            plt.ylabel('Number of cols in the grid network')
+
+        suptitle = "[model=%s,sparse=%s,stat=%s,Top=o,Mid=^,Low=v,size=fixed,use_L=%s,use_OD=%s,use_CP=%s,use_LP=%s]"
+        title1 = 'Comparison of solvers'
+
+        leq = [('blocks_to_routes', b2n_leq)]
+        geq = [('blocks_to_routes', b2n_geq)]
+        group_by = ['NCP', 'NLP']
+        match_by = [('model', model), ('sparse', sparse)]
+        # group_by.append('use_L') if use_L is None else match_by.append(
+        #     ('use_L', use_L))
+        # group_by.append('use_OD') if use_OD is None else match_by.append(
+        #     ('use_OD', use_OD))
+        # group_by.append('use_CP') if use_CP is None else match_by.append(
+        #     ('use_CP', use_CP))
+        # group_by.append('use_LP') if use_LP is None else match_by.append(
+        #     ('use_LP', use_LP))
+        if model == 'P':
+            group_by.extend(['nrow', 'ncol'])
+
+        leq.extend([('NLPCP', max_NLPCP)] if max_NLPCP is not None else [])
+
+        # colors = ['b','g','r','c','m','y','k']
+        color_map = {'LSQR': 'b', 'LS': 'g', 'CS': 'r', 'BI': 'c'}
+
+        fig = plt.figure()
+        legend = []
+        d = filter(self.scenarios, group_by=group_by, match_by=match_by,
+                   leq=leq, geq=geq)
+        if len(d.keys()) > 0:
+            plot1(d, title1, stat=stat, color_map=color_map,
+                  error_leq=error_leq,
+                  error_leq2=error_leq2, error_leq3=error_leq3)
+        plt.legend(legend)
+
+        ax = plt.gca()
+        ax.autoscale(True)
+        fig.suptitle(
+            "%s %s" % (suptitle % (model, sparse, stat, use_L, use_OD, use_CP,
+                                   use_LP), caption), fontsize=8)
+
+        if disp:
+            show()
+
 
 if __name__ == "__main__":
     SS = ScenarioSpace(no_lsqr=True)
-    SS.scenarios_to_output()
-    # SS.load_output()
+    # SS.scenarios_to_output()
+    SS.load_output()
     # SS.generate_statistics(error=10)
+    SS.plot_solver_vs_size(sparse=False, caption='', model='P', error_leq=0.1,
+                          error_leq2=1, error_leq3=100, b2n_leq=1.00, b2n_geq=0.00)
+
 
     # scenario_files = os.listdir(c.SCENARIO_DIR_NEW)
     # for sf in scenario_files:
