@@ -26,6 +26,7 @@ class SolverBI(Solver):
             self.block_sizes, out = \
             solver_input(data, full=self.full, L=self.L, OD=self.OD,
                          CP=self.CP, LP=self.LP, eq='CP', EQ_elim=False)
+        assert np.linalg.norm(self.EQ.dot(self.x_true) - np.ones(self.EQ.shape[0])) < 1e-10, 'Ux!=1'
         self.output = out
 
     def solve(self):
