@@ -30,14 +30,14 @@ class SolverLS(Solver):
     def setup(self, data):
         init_time = time.time()
         if data is None and self.test is not None:
-            from BSC_NNLS.python.util import load_data
+            from BSLS.python.util import load_data
             fname = '%s/%s' % (c.DATA_DIR,self.test)
             self.A, self.b, self.N, self.block_sizes, self.x_true, self.nz,\
             self.flow, self.rsort_index, self.x0, out = \
                 load_data(fname, full=self.full, L=self.L, OD=self.OD,
                           CP=self.CP, LP=self.LP, eq=self.eq, init=self.init)
         else:
-            from BSC_NNLS.python.util import solver_input
+            from BSLS.python.util import solver_input
             self.A, self.b, self.N, self.block_sizes, self.x_true, self.nz, \
             self.flow, self.rsort_index, self.x0, out = \
                 solver_input(data, full=self.full, L=self.L, OD=self.OD,
