@@ -96,12 +96,13 @@ class Scenario:
             if type == 'small_graph_OD.mat':
                 TN = GridNetwork(nrow=self.args.nrow, ncol=self.args.ncol,
                                  nodroutes=self.args.nodroutes,
-                                 myseed=self.myseed, o_flow=1.0)
+                                 myseed=self.myseed, o_flow=1.0,
+                                 alpha=self.args.alpha)
             elif type == 'small_graph_OD_dense.mat':
                 TN = GridNetwork(nrow=self.args.nrow, ncol=self.args.ncol,
                                  nodroutes=self.args.nodroutes,
                                  myseed=self.myseed, o_flow=1.0,
-                                 concentration=0.1)
+                                 concentration=0.1, alpha=self.args.alpha)
         else:
             SO = True if self.args.model == 'SO' else False
 
@@ -117,23 +118,21 @@ class Scenario:
 
     def _new_solver(self):
         eq = 'CP' if self.args.use_CP else 'OD'
+        config = {
+            'full': self.args.all_links,
+            'L': self.args.use_L, 'OD': self.args.use_OD,
+            'CP': self.args.use_CP, 'LP': self.args.use_LP, 'eq': eq,
+            'noise': self.args.noise,
+        }
         if self.args.solver == 'CS':
-            solver = SolverCS(full=self.args.all_links, L=self.args.use_L,
-                              OD=self.args.use_OD, CP=self.args.use_CP,
-                              LP=self.args.use_LP, eq=eq)
+            solver = SolverCS(iters=self.args.iters, init=self.args.init,
+                              method=self.args.method, **config)
         elif self.args.solver == 'BI':
-            solver = SolverBI(sparse=self.args.sparse, full=self.args.all_links,
-                              L=self.args.use_L, OD=self.args.use_OD,
-                              CP=self.args.use_CP, LP=self.args.use_LP)
+            solver = SolverBI(sparse=self.args.sparse, **config)
         elif self.args.solver == 'LS':
-            solver = SolverLS(full=self.args.all_links, init=self.args.init,
-                              L=self.args.use_L, OD=self.args.use_OD,
-                              CP=self.args.use_CP, LP=self.args.use_LP, eq=eq,
-                              noise=self.args.noise, method=self.args.method)
+            solver = SolverLS(method=self.args.method, init=self.args.init, **config)
         elif self.args.solver == 'LSQR':
-            solver = SolverLSQR(full=self.args.all_links, L=self.args.use_L,
-                                OD=self.args.use_OD, CP=self.args.use_CP,
-                                LP=self.args.use_LP)
+            solver = SolverLSQR(**config)
         else:
             return NotImplemented
         return solver

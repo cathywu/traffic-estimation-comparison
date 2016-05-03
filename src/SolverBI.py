@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import time
 
 import config as c
 from Solver import Solver
@@ -9,28 +10,40 @@ from bayesian.grid_simulation import MCMC
 
 # FIXME temporary hack
 from scenario_utils import LS_postprocess
+from BSLS.python.bsls_matrices import BSLSMatrices
 
 class SolverBI(Solver):
-    def __init__(self, sparse=False, full=True, L=True, OD=True, CP=True, LP=True):
-        Solver.__init__(self)
+    def __init__(self, sparse=False, full=True, L=True, OD=True, CP=True,
+                 LP=True, noise=0.0):
+        Solver.__init__(self, full=full, L=L, OD=OD, CP=CP, LP=LP, noise=noise)
 
         self.sparse = sparse
-        self.full = full
-        self.L = L
-        self.OD = OD
-        self.CP = CP
-        self.LP = LP
 
     def setup(self, data):
-        self.AA, self.bb_obs, self.EQ, self.x_true, self.scaling,\
-            self.block_sizes, out = \
-            solver_input(data, full=self.full, L=self.L, OD=self.OD,
-                         CP=self.CP, LP=self.LP, eq='CP', EQ_elim=False)
-        assert np.linalg.norm(self.EQ.dot(self.x_true) - np.ones(self.EQ.shape[0])) < 1e-10, 'Ux!=1'
-        self.output = out
+        init_time = time.time()
+        config = {
+            'full': self.full, 'L': self.L, 'OD': self.OD, 'CP': self.CP,
+            'LP': self.LP, 'eq': 'CP',
+            }
+
+        bm = BSLSMatrices(data=data, **config)
+        bm.simple_simplex_form()
+        self.AA, self.bb_obs, self.C, self.x_true, self.scaling, \
+                self.block_sizes = bm.get_BI()
+        init_time = time.time() - init_time
+        self.output = bm.info
+        self.output['init_time'] = init_time
+
+        if self.noise:
+            b_true = self.bb_obs
+            delta = np.random.normal(scale=self.bb_obs*self.noise)
+            self.bb_obs = self.bb_obs + delta
+
+        assert np.linalg.norm(self.C.dot(self.x_true) - \
+                              np.ones(self.C.shape[0])) < 1e-10, 'Ux!=1'
 
     def solve(self):
-        if self.EQ is None:
+        if self.C is None:
             self.output['error'] = "EQ constraint matrix is empty"
             logging.error(self.output['error'])
             return
@@ -40,7 +53,7 @@ class SolverBI(Solver):
             return
 
         logging.info('A: %s' % repr(self.AA.shape))
-        self.model,alpha,self.x_pri = create_model(self.AA, self.bb_obs, self.EQ,
+        self.model,alpha,self.x_pri = create_model(self.AA, self.bb_obs, self.C,
                                          self.x_true, sparse=self.sparse)
         self.output['alpha'] = alpha
 
@@ -73,7 +86,7 @@ class SolverBI(Solver):
                                                    self.AA.todense(),
                                                self.bb_obs, self.x_true,
                                                output=self.output, is_x=True)
-        self.output['blocks'] = self.EQ.shape[0] if self.EQ is not None else None
+        self.output['blocks'] = self.C.shape[0] if self.C is not None else None
         self.model, self.x_pri = None, None
 
 if __name__ == "__main__":

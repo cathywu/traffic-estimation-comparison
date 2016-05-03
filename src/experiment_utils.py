@@ -7,7 +7,8 @@ from scenario_utils import save
 
 
 def generate_grid_networks(nrows, ncols, nodroutes, times=1, myseed=None,
-                           prefix='%s/TN_Grid',max_prod=None):
+                           prefix='%s/TN_Grid', max_prod=None, alphas=(1,),
+                           type='all'):
     for i in range(times):
         for nrow in nrows:
             for ncol in ncols:
@@ -15,12 +16,18 @@ def generate_grid_networks(nrows, ncols, nodroutes, times=1, myseed=None,
                     if nrow * ncol > max_prod:
                         continue
                 for nodroute in nodroutes:
-                    TN = GridNetwork(ncol=ncol,nrow=nrow,nodroutes=nodroute,
-                                     myseed=myseed)
-                    save(TN, prefix=prefix % c.TN_DIR)
-                    TN = GridNetwork(ncol=ncol,nrow=nrow,nodroutes=nodroute,
-                                     myseed=myseed, concentration=0.1)
-                    save(TN, prefix=prefix % c.TN_DIR)
+                    for alpha in alphas:
+                        if type in ('dispersed', 'all'):
+                            TN = GridNetwork(ncol=ncol, nrow=nrow,
+                                             nodroutes=nodroute,
+                                             myseed=myseed, alpha=alpha)
+                            save(TN, prefix=prefix % c.TN_DIR)
+                        if type in ('concentrated', 'all'):
+                            TN = GridNetwork(ncol=ncol, nrow=nrow,
+                                             nodroutes=nodroute,
+                                             myseed=myseed, concentration=0.1,
+                                             alpha=alpha)
+                            save(TN, prefix=prefix % c.TN_DIR)
 
 def generate_equilibrium_networks(SOs=(False),path=None, prefix='%s/TN_EQ'):
     for SO in SOs:

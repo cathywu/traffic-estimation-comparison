@@ -3,7 +3,7 @@ import ipdb
 import json
 import os
 
-from pylab import connect, scatter
+from pylab import connect, scatter, boxplot, figure
 from AnnoteFinder import AnnoteFinder
 import numpy as np
 
@@ -44,6 +44,38 @@ def filter_all_links(d):
                     p['NL'] == 0 and p['NB'] == 0 and p['NS'] == 0:
         return True
     return False
+
+
+def plot_box(x, y, nbins=10, c=None, s=None, label=None, info=None, alpha=1.0,
+                 marker='o', vmin=None, vmax=None, legend=True):
+    # x, y, c, s = rand(4, 100)
+    fig = figure()
+    ax = fig.add_subplot(111)
+    (hist, bins) = np.histogram(x, bins=nbins)
+    ind = np.digitize(x, bins)
+    data = []
+    positions = []
+    for i in range(1, nbins+1):
+        y_slice = y[ind == i]
+        if y_slice.size > 10:
+            # y_mean = np.median(y_slice)
+            # y_upper = np.percentile(y_slice, 75)
+            # y_lower = np.percentile(y_slice, 25)
+            # data.append((y_mean, y_mean, y_upper, y_lower))
+            data.append(y_slice)
+            positions.append((bins[i-1] + bins[i])/2)
+
+    if legend:
+        ax.boxplot(data, positions=[round(p,2) for p in positions], widths=0.055)
+        ax.set_xlim(0,0.5)
+    else:
+        scatter(x, y, 100*s, c, alpha=alpha, marker=marker, vmin=vmin,
+                vmax=vmax, label='_nolegend_')
+
+    #fig.savefig('pscoll.eps')
+    if label is not None:
+        af = AnnoteFinder(x, y, label, info=info)
+        connect('button_press_event', af)
 
 
 def plot_scatter(x, y, c=None, s=None, label=None, info=None, alpha=1.0,
@@ -246,7 +278,7 @@ def load_output(no_lsqr=False):
     files = os.listdir(c.RESULT_DIR)
     # files = ['output_Experiment.txt']
 
-    CS_methods = ['cvx_oracle', 'random_sampling_L1_6000_replace', 'random_sampling_L1_30_replace']
+    CS_methods = ['cvx_random_sampling_L1_6000_replace'] #, 'cvx_oracle' # , 'cvx_random_sampling_L1_30_replace']
     LS_methods = ['BB', 'LBFGS', 'DORE']
 
     scenarios = []
@@ -273,6 +305,11 @@ def load_output(no_lsqr=False):
 
                 # Exclude invalid dicts
                 if not filter_valid(d):
+                    continue
+
+                # Some bug caused a lot of the CS results to give exactly 100%
+                # error, so let's filter those out
+                if abs(get_key(d, 'perflow') - 1.0) < 1e-10:
                     continue
 
                 # Exclude LSQR results

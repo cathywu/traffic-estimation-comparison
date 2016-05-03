@@ -280,7 +280,7 @@ def plot_sensors_vs_configs_v3(s, init=False, sparse=True, stat='mean',
         d = filter(s,group_by=['nroutes','NLP','NCP','nOD','nLinks'],
                    match_by=match_by + match_by_sensor, leq=leq+leq_NLPCP)
         if len(d.keys()) > 0:
-            print label, len(d.keys())
+            # print label, len(d.keys())
             plot1(d, title1, config=config, color=color, stat=stat, marker='o')
             legend.append(label)
             plot_lp(d)

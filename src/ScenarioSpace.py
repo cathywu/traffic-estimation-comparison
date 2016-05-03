@@ -12,7 +12,7 @@ import config as c
 from scenario_utils import load, new_s, NumpyAwareJSONEncoder, args_from_SC, \
     args_from_solver, args_from_TN
 from plotting_utils import plot_scatter, filter, get_stats, get_key, get_step, \
-    load_output
+    load_output, plot_box
 from generate_scenarios import dump
 
 
@@ -257,13 +257,13 @@ class ScenarioSpace:
         suptitle = "Size = fixed [solver=%s,model=%s,stat=%s,LP=^,CP=v]"
         title1 = 'Size vs speed'
 
-        markers = ['*', 'd', '+', 'x']
+        markers = ['.', ',', 'o', '+', 'd', '*', 'x']
         leq = [('percent flow allocated incorrectly', error_leq),
                ('blocks_to_routes', b2n_leq)]
         # filter for tests that took some time (not just initial soln)
         geq = [('duration', 1e-8), ('blocks_to_routes', b2n_geq)]
         fig = plt.figure()
-        print
+        # print
         for solver, m in zip(solvers, markers):
             match_by = [('model', 'P'), ('solver', solver)]
             if max_NLPCP is not None:
@@ -272,10 +272,10 @@ class ScenarioSpace:
             d = filter(self.scenarios_v2, match_by=match_by, leq=leq, geq=geq)
             if len(d.keys()) > 0:
                 s = d.values()[0]
-                print '[%s (%s): %s]' % (solver, m, len(s)),
-                fig.suptitle("%s %s" % (suptitle % (solver, model,
-                                                    stat), caption), fontsize=8)
-                colorbar = True if m == '*' else False
+                # print '[%s (%s): %s]' % (solver, m, len(s)),
+                # fig.suptitle("%s %s" % (suptitle % (solver, model,
+                #                                     stat), caption), fontsize=8)
+                colorbar = True if m == '.' else False
                 plot1(s, title1, stat=stat, marker=m, error_leq=error_leq,
                       colorbar=colorbar, ylim=ylim, color_axis=color_axis)
                 plt.hold(True)
@@ -287,6 +287,108 @@ class ScenarioSpace:
                                caption=None, error_leq=0.01, max_NLPCP=None,
                                model=None, damp=0.0, disp=True, ylim=None,
                                xlim=None, color_axis='b2n'):
+
+        def plot1(s, title, stat='mean', marker='o', ylim=None, colorbar=True,
+                  color_axis='error'):
+            nroutes = get_stats(s, lambda x: get_key(x, 'nroutes'), stat=stat)
+            blocks_to_routes = get_stats(s, lambda x: get_key(x,
+                                                              'blocks_to_routes'),
+                                         stat=stat)
+            nrows = get_stats(s, lambda x: get_key(x, 'nrow'), stat=stat)
+            ncols = get_stats(s, lambda x: get_key(x, 'ncol'), stat=stat)
+            sparsity = [nrow * ncol * 2 / nroute for (nrow, ncol, nroute) in
+                        zip(nrows, ncols, nroutes)]
+            duration = get_stats(s, lambda x: get_key(x, 'duration'), stat=stat)
+
+            blocks = get_stats(s, lambda x: get_key(x, 'blocks'), stat=stat)
+            NLP = get_stats(s, lambda x: get_key(x, 'NLP'), stat=stat)
+            NCP = get_stats(s, lambda x: get_key(x, 'NCP'), stat=stat)
+            nLPconstraints = get_stats(s, lambda x: get_key(x, 'nLP'),
+                                       stat=stat)
+            nCPconstraints = get_stats(s, lambda x: get_key(x, 'nCP'),
+                                       stat=stat)
+
+            perflow_wrong = get_stats(s, lambda x: get_key(x, 'perflow'),
+                                      stat='min')
+
+            note = [{'nLP constraints': a, 'nCP constraints': b, 'NLP': k,
+                     'NCP': e, 'blocks': f, 'duration': "{:.5f}".format(g),
+                     'perflow wrong': "{:.5f}".format(h),
+                     } for (a, b, k, e, f, g, h) in zip(nLPconstraints,
+                                                        nCPconstraints,
+                                                        NLP, NCP, blocks,
+                                                        duration,
+                                                        perflow_wrong)]
+            info = s
+
+            if color_axis == 'error':
+                colors = perflow_wrong
+            elif color_axis == 'b2n':
+                colors = blocks_to_routes
+            else:
+                return NotImplemented
+            size = 2
+            labels = [json.dumps(x, sort_keys=True, indent=4) for x in note]
+
+            plot_scatter(sparsity, perflow_wrong, c=colors, s=size,
+                         label=labels, info=info, alpha=0.2, marker=marker)
+            plt.hold(True)
+
+            if colorbar:
+                cb = plt.colorbar()
+                cb.set_alpha(1)
+                cb.draw_all()
+                if color_axis == 'error':
+                    cb.set_label('% route flow error')
+                elif color_axis == 'b2n':
+                    cb.set_label('Blocks / nroutes')
+                else:
+                    return NotImplemented
+
+            plt.title(title)
+            plt.xlabel('Sparsity (percent)')
+            plt.ylabel('Relative error')
+            if ylim is not None:
+                plt.ylim(ylim[0], ylim[1])
+            else:
+                plt.ylim(np.max([plt.ylim()[0]], 0), plt.ylim()[1])
+            if xlim is not None:
+                plt.xlim(xlim[0], xlim[1])
+            else:
+                plt.xlim(np.max([0, plt.xlim()[0]]), plt.xlim()[1])
+
+        suptitle = "Size = fixed [solver=%s,model=%s,sparse=%s,init=%s,stat=%s,LP=^,CP=v]"
+        title1 = 'Sparsity vs route flow error'
+
+        markers = ['.', ',', 'o',  '*', 'd', '+', 'x']
+        leq = [('percent flow allocated incorrectly', error_leq)]
+        geq = [('duration', 1e-8)]  # took some time (not just initial soln)
+        fig = plt.figure()
+        # print
+        for solver, m in zip(solvers, markers):
+            match_by = [('model', 'P'), ('solver', solver)]
+            if max_NLPCP is not None:
+                leq.append(('NLPCP', max_NLPCP))
+
+            d = filter(self.scenarios, match_by=match_by, leq=leq, geq=geq)
+            if len(d.keys()) > 0:
+                s = d.values()[0]
+                # print '[%s (%s): %s]' % (solver, m, len(s)),
+                # fig.suptitle("%s %s" % (suptitle % (solver, model, sparse, init,
+                #                                     stat), caption), fontsize=8)
+                colorbar = True if m == '.' else False
+                plot1(s, title1, stat=stat, marker=m, colorbar=colorbar,
+                      ylim=ylim, color_axis=color_axis)
+                plt.hold(True)
+        if disp:
+            plt.hold(False)
+            show()
+
+    def plot_sparsity_vs_error_box(self, solvers=('LS', 'BI', 'LSQR', 'CS'),
+                               init=False, sparse=True, stat='mean',
+                               caption=None, error_leq=0.01, max_NLPCP=None,
+                               model=None, damp=0.0, disp=True, ylim=None,
+                               xlim=None, color_axis='b2n', nbins=9):
 
         def plot1(s, title, stat='mean', marker='o', ylim=None, colorbar=True,
                   color_axis='error'):
@@ -330,24 +432,19 @@ class ScenarioSpace:
             size = 2
             labels = [json.dumps(x, sort_keys=True, indent=4) for x in note]
 
-            plot_scatter(sparsity, perflow_wrong, c=colors, s=size,
+            # some data values are >1 so filter them out
+            sparsity = np.array(sparsity)
+            perflow_wrong = np.array(perflow_wrong)
+            sparsity = sparsity[sparsity<=0.5]
+            perflow_wrong = perflow_wrong[sparsity<=0.5]
+
+            plot_box(sparsity, perflow_wrong, nbins=nbins, c=colors, s=size,
                          label=labels, info=info, alpha=0.2, marker=marker)
             plt.hold(True)
 
-            if colorbar:
-                cb = plt.colorbar()
-                cb.set_alpha(1)
-                cb.draw_all()
-                if color_axis == 'error':
-                    cb.set_label('% route flow error')
-                elif color_axis == 'b2n':
-                    cb.set_label('Blocks / nroutes')
-                else:
-                    return NotImplemented
-
             plt.title(title)
             plt.xlabel('Sparsity (percent)')
-            plt.ylabel('Route flow error')
+            plt.ylabel('Relative error')
             if ylim is not None:
                 plt.ylim(ylim[0], ylim[1])
             else:
@@ -360,11 +457,11 @@ class ScenarioSpace:
         suptitle = "Size = fixed [solver=%s,model=%s,sparse=%s,init=%s,stat=%s,LP=^,CP=v]"
         title1 = 'Sparsity vs route flow error'
 
-        markers = ['*', 'd', '+', 'x']
+        markers = ['.', ',', 'o',  '*', 'd', '+', 'x']
         leq = [('percent flow allocated incorrectly', error_leq)]
         geq = [('duration', 1e-8)]  # took some time (not just initial soln)
         fig = plt.figure()
-        print
+        # print
         for solver, m in zip(solvers, markers):
             match_by = [('model', 'P'), ('solver', solver)]
             if max_NLPCP is not None:
@@ -373,10 +470,10 @@ class ScenarioSpace:
             d = filter(self.scenarios, match_by=match_by, leq=leq, geq=geq)
             if len(d.keys()) > 0:
                 s = d.values()[0]
-                print '[%s (%s): %s]' % (solver, m, len(s)),
-                fig.suptitle("%s %s" % (suptitle % (solver, model, sparse, init,
-                                                    stat), caption), fontsize=8)
-                colorbar = True if m == '*' else False
+                # print '[%s (%s): %s]' % (solver, m, len(s)),
+                # fig.suptitle("%s %s" % (suptitle % (solver, model, sparse, init,
+                #                                     stat), caption), fontsize=8)
+                colorbar = True if m == '.' else False
                 plot1(s, title1, stat=stat, marker=m, colorbar=colorbar,
                       ylim=ylim, color_axis=color_axis)
                 plt.hold(True)
@@ -415,9 +512,10 @@ class ScenarioSpace:
                     #     print perflow_wrong, solvers, dd.keys(), len(dd.values())
                     if solvers.size == size:
                         if solvers.size == 2:
-                            print '[%s=%s], %s = %s | %s' % (solvers.size,
-                                                             repr(solvers), len(v), repr([len(ddd) for ddd in dd.values()]),
-                                                             repr(k))
+                            pass
+                            # print '[%s=%s], %s = %s | %s' % (solvers.size,
+                            #                                  repr(solvers), len(v), repr([len(ddd) for ddd in dd.values()]),
+                            #                                  repr(k))
                         # if dict(k)['nrow']*dict(k)['ncol'] <= 40:
                         #     print 'Need to test for BI: NLP=%s NCP=%s (size = (%s,%s))' % \
                         #           (dict(k)['NLP'], dict(k)['NCP'], dict(k)['nrow'],
@@ -727,9 +825,9 @@ class ScenarioSpace:
 
         ax = plt.gca()
         ax.autoscale(True)
-        fig.suptitle(
-            "%s %s" % (suptitle % (model, sparse, stat, use_L, use_OD, use_CP,
-                                   use_LP), caption), fontsize=8)
+        # fig.suptitle(
+        #     "%s %s" % (suptitle % (model, sparse, stat, use_L, use_OD, use_CP,
+        #                            use_LP), caption), fontsize=8)
 
         if disp:
             show()
@@ -740,8 +838,13 @@ if __name__ == "__main__":
     # SS.scenarios_to_output()
     SS.load_output()
     # SS.generate_statistics(error=10)
-    SS.plot_solver_vs_size(sparse=False, caption='', model='P', error_leq=0.1,
-                          error_leq2=1, error_leq3=100, b2n_leq=1.00, b2n_geq=0.00)
+    # SS.plot_sparsity_vs_error_box(error_leq=2.0,ylim=(-0.01,2.05),xlim=(0,0.6),solvers=('CS',))
+    SS.plot_sparsity_vs_error(error_leq=2.0,ylim=(-0.01,2.05),xlim=(0,0.1),solvers=('CS',))
+    SS.plot_sparsity_vs_error(error_leq=2.0,ylim=(-0.01,2.05),xlim=(0,0.1),solvers=('LS',))
+    SS.plot_size_vs_speed(error_leq=10,ylim=(-0.1,1300),solvers=('LS','CS'), b2n_geq=0.4)
+    SS.plot_size_vs_speed(error_leq=10.00,ylim=(-0.1,2000),solvers=('BI',), b2n_geq=0.2)
+    # SS.plot_solver_vs_size(sparse=False, caption='', model='P', error_leq=0.1,
+    #                       error_leq2=1, error_leq3=100, b2n_leq=1.00, b2n_geq=0.00)
 
 
     # scenario_files = os.listdir(c.SCENARIO_DIR_NEW)

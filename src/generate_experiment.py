@@ -11,7 +11,59 @@ from SolverLS import SolverLS
 from SolverCS import SolverCS
 from scenario_utils import save
 
+##############################################################################
+# Final configurations specific to the comparison paper
+##############################################################################
+def grid_networks_comparison(myseed=None):
+    times = 1
+    nrows = [4]
+    ncols = [7]
+    nodroutes = [15]
+    alphas = [1]
 
+    generate_grid_networks(nrows, ncols, nodroutes, times=times, alphas=alphas,
+                           myseed=myseed, type='concentrated')
+
+
+def grid_networks_comparison_alpha(myseed=None):
+    times = 1
+    nrows = [4]
+    ncols = [7]
+    nodroutes = [15]
+    alphas = [0.3, 1, 3]
+
+    generate_grid_networks(nrows, ncols, nodroutes, times=times, alphas=alphas,
+                           myseed=myseed, type='concentrated')
+
+
+def UE_networks():
+    SOs = [True, False]
+    EQ_network_path = 'los_angeles_data_2.mat'
+    generate_equilibrium_networks(SOs=SOs, path=EQ_network_path)
+
+
+def sensor_configurations_comparison(myseed=None):
+    # SENSOR NETWORKS
+    num_links = [np.inf]
+    num_ODs = [np.inf]
+    num_cellpath_NBs = [10, 20, 40, 80, 120]  # range(0,300,30)
+    num_cellpath_NLs = [0]  # [0, 100, np.inf]
+    num_cellpath_NSs = [0]
+    num_linkpaths = [0]  # range(0,300,30)
+    myseed = 2347234328
+    times = 1
+
+    generate_sensor_configurations(num_links=num_links, num_ODs=num_ODs,
+                                   num_cellpath_NBs=num_cellpath_NBs,
+                                   num_cellpath_NLs=num_cellpath_NLs,
+                                   num_cellpath_NSs=num_cellpath_NSs,
+                                   num_linkpaths=num_linkpaths,
+                                   times=times, myseed=myseed)
+
+
+##############################################################################
+# Other (intermediate) configurations
+##############################################################################
 def grid_networks_small(myseed=None):
     times = 1
     nrows = range(1, 5, 3)
@@ -37,11 +89,6 @@ def grid_networks_all(myseed=None):
     nodroutes = [15]
 
     generate_grid_networks(nrows, ncols, nodroutes, times=times, myseed=myseed)
-
-def UE_networks():
-    SOs = [True, False]
-    EQ_network_path = 'los_angeles_data_2.mat'
-    generate_equilibrium_networks(SOs=SOs, path=EQ_network_path)
 
 
 def sensor_configurations_small_enough(myseed=None):
@@ -106,7 +153,7 @@ def solvers(BI=False, LS=False, CS=False, LSQR=False, LS2=False, CS2=False,
     if LSQR:
         solvers.append(SolverLSQR(damp=0))
     if CS:
-        solvers.append(SolverCS(method='cvx_random_sampling_L1_30_replace'))
+        solvers.append(SolverCS(method='cvx_random_sampling_L1_6000_replace'))
 
     if LS:
         solvers.append(SolverLS(init=True, method='BB'))
@@ -134,15 +181,20 @@ def solvers(BI=False, LS=False, CS=False, LSQR=False, LS2=False, CS2=False,
         save(s, prefix="%s/Solver" % c.SOLVER_DIR)
 
 
+##############################################################################
+# Select configurations
+##############################################################################
 def experiment(BI=False, LS=False, CS=False, LSQR=False, LS2=False, CS2=False,
                LSQR2=False, networks=False, sensors=False):
     myseed = 2347234328
     if networks:
         # grid_networks_all(myseed=myseed)
-        grid_networks_small_enough(myseed=myseed)
-        # UE_networks()
+        # grid_networks_small_enough(myseed=myseed)
+        UE_networks()
+        # grid_networks_comparison(myseed=myseed)
     if sensors:
-        sensor_configurations_small_enough(myseed=myseed)
+        # sensor_configurations_small_enough(myseed=myseed)
+        sensor_configurations_comparison(myseed=myseed)
     solvers(BI=BI, LS=LS, CS=CS, LSQR=LSQR, LS2=LS2, CS2=CS2, LSQR2=LSQR2)
 
 if __name__ == "__main__":
@@ -158,16 +210,16 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     if args.solver == 'LS':
-        experiment(LS=True)
+        experiment(LS=True, networks=args.networks, sensors=args.sensors)
     elif args.solver == 'BI':
-        experiment(BI=True)
+        experiment(BI=True, networks=args.networks, sensors=args.sensors)
     elif args.solver == 'CS':
-        experiment(CS=True)
+        experiment(CS=True, networks=args.networks, sensors=args.sensors)
     elif args.solver == 'LSQR':
-        experiment(LSQR=True)
+        experiment(LSQR=True, networks=args.networks, sensors=args.sensors)
     elif args.solver == 'LS2':
-        experiment(LS2=True)
+        experiment(LS2=True, networks=args.networks, sensors=args.sensors)
     elif args.solver == 'CS2':
-        experiment(CS2=True)
+        experiment(CS2=True, networks=args.networks, sensors=args.sensors)
     elif args.solver == 'LSQR2':
-        experiment(LSQR2=True)
+        experiment(LSQR2=True, networks=args.networks, sensors=args.sensors)

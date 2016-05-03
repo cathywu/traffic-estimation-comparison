@@ -1,3 +1,4 @@
+from __future__ import division
 import ipdb
 import argparse
 import logging
@@ -11,11 +12,19 @@ import numpy as np
 import numpy.linalg as la
 import matplotlib.pyplot as plt
 
-import config as c
-from BSLS.python import util
-from BSLS.python.c_extensions.simplex_projection import simplex_projection
-from BSLS.python import BB, LBFGS, DORE, solvers
+from sklearn.isotonic import IsotonicRegression
 
+import config as c
+# from python.isotonic_regression.simplex_projection import simplex_projection
+# from projection import pysimplex_projection
+from BSLS.python.bsls_utils import  x2z, particular_x0
+from BSLS.python.isotonic_regression.block_isotonic_regression import block_isotonic_regression
+from BSLS.python.gradient_descent import GradientDescent
+
+
+##############################################################################
+# Parameter handling
+##############################################################################
 def args_from_TN(TN, args=None):
     # TrafficNetwork args
     if args is None:
@@ -72,6 +81,7 @@ def args_from_solver(solver, args=None):
         args['eq'] = solver.eq
         args['init'] = solver.init
         args['method'] = solver.method
+        args['iters'] = solver.iters
     args['all_links'] = solver.full
     args['use_L'] = solver.L
     args['use_OD'] = solver.OD
@@ -79,17 +89,8 @@ def args_from_solver(solver, args=None):
     args['use_LP'] = solver.LP
     return args
 
-class NumpyAwareJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.ndarray) and obj.ndim == 1:
-            return obj.tolist()
-        return json.JSONEncoder.default(self, obj)
-
 def new_s(s=None):
-    base_s = {'solver': 'LS', 'model': 'P', 'sparse': False, 'noise': 0.0,
-              'all_links': True, 'use_L': True, 'use_OD': True, 'use_CP': True,
-              'use_LP': True, 'NLP': 0, 'NB': 0, 'NS': 0, 'NL': 0, 'eq': 'CP',
-              'init': False, 'output': False}
+    base_s = vars(new_namespace())
     if s is None:
         return base_s
     for (k,v) in base_s.iteritems():
@@ -97,22 +98,33 @@ def new_s(s=None):
             s[k] = v
     return s
 
-def load(fname=None):
-    try:
-        with open(fname) as f:
-            return pickle.load(f)
-    except (IOError, ValueError, BadPickleGet):
-        print 'Error loading %s' % fname
-        return None
+def new_namespace():
+    ns = argparse.Namespace()
+    ns.solver = 'LS'
+    ns.model = 'P'
+    ns.sparse = False
+    ns.noise = 0.0
+    ns.all_links = True
+    ns.use_L = True
+    ns.use_OD = True
+    ns.use_CP = True
+    ns.use_LP = True
+    ns.NLP = 0
+    ns.NB = 0
+    ns.NS = 0
+    ns.NL = 0
+    ns.eq = 'CP'
+    ns.init = False
 
-def save(x, fname=None, prefix=None):
-    if fname is None and prefix is not None:
-        t = int(time.time())
-        r = randint(1e5,999999)
-        fname = "%s_%s_%s.pkl" % (prefix, t, r)
-    if fname is not None:
-        with open(fname, 'w') as f:
-            pickle.dump(x, f)
+    ns.output = False
+    ns.iters = 0
+    ns.nodroutes = 15
+    ns.damp = 0.0
+    ns.alpha = 1.0
+    ns.nrow = 0
+    ns.ncol = 0
+    ns.method = ''
+    return ns
 
 def parser():
     parser = argparse.ArgumentParser()
@@ -146,9 +158,17 @@ def parser():
     parser.add_argument('--init',dest='init',action='store_true',
                         default=False,help='LS only: initial solution from data')
 
+    # BI solver only
+    parser.add_argument('--alpha',dest='alpha',type=float,default=1,
+                        help='BI only: spread')
+
     # LSQR solver only
     parser.add_argument('--damp',dest='damp',type=float,default=0.0,
                         help='LSQR only: damping factor')
+
+    # CS solver only
+    parser.add_argument('--iters',dest='iters',type=int,default=6000,
+                        help='CS only: # iterations for sampling')
 
     # Sparsity
     parser.add_argument('--sparse',dest='sparse',action='store_true',
@@ -213,58 +233,131 @@ def update_args(args, params):
     if args.solver == 'LSQR':
         args.damp = float(params['damp'])
 
+    if args.solver == 'CS':
+        args.iters = int(params['iters'])
+
     return args
 
-def LS_solve(A,b,x0,N,block_sizes,method):
-    z0 = util.x2z(x0,block_sizes)
+
+##############################################################################
+# Misc utilities
+##############################################################################
+def load(fname=None):
+    try:
+        with open(fname) as f:
+            return pickle.load(f)
+    except (IOError, ValueError, BadPickleGet):
+        print 'Error loading %s' % fname
+        return None
+
+def save(x, fname=None, prefix=None):
+    if fname is None and prefix is not None:
+        t = int(time.time())
+        r = randint(1e5,999999)
+        fname = "%s_%s_%s.pkl" % (prefix, t, r)
+    if fname is not None:
+        with open(fname, 'w') as f:
+            pickle.dump(x, f)
+
+class NumpyAwareJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray) and obj.ndim == 1:
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
+
+
+##############################################################################
+# Solver helpers
+##############################################################################
+def CS_solve(A,b,x0,N,block_sizes,mask):
+    z0 = x2z(x0,block_sizes)
+    target = A.dot(x0)-b
+    xp = particular_x0(block_sizes)
+
+    AT = A.T.tocsr()
+    NT = N.T.tocsr()
+    mind = mask.nonzero()[0]
+
+    assert np.all((xp + N.dot(x2z(mask,block_sizes)))[mind])==True, \
+        'Faulty conversion to and from x'
+
+    eps = 0
+    gamma = 1
+    def f(z):
+        sparse_term = np.nan_to_num(1/((xp+N.dot(z))[mind]))
+        sparse_term = np.minimum(sparse_term, 1e5)
+        sparse_term = np.maximum(sparse_term, -1e5)
+        return np.sum(sparse_term) + gamma*0.5*la.norm(A.dot(N.dot(z))+target)**2
+
+    def nabla_f(z):
+        sparse_term = np.zeros(mask.size)
+        sparse_term[mind] = -np.nan_to_num(1/(xp + N.dot(z))[mind]**2)
+        if np.any(np.abs(sparse_term) > 1e300):
+            sparse_term = np.minimum(sparse_term, 1e5)
+            sparse_term = np.maximum(sparse_term, -1e5)
+            logging.error("Sparse term near infinity")
+            # ipdb.set_trace()
+        else:
+            print 'good'
+        return NT.dot(sparse_term + gamma*AT.dot(A.dot(N.dot(z)) + target))
+
+    ir = IsotonicRegression(y_min=0, y_max=1)
+    cum_blocks = np.concatenate(([0], np.cumsum(block_sizes-1)))
+    blocks_start = cum_blocks
+    blocks_end = cum_blocks[1:]
+
+    def proj(x):
+        return block_isotonic_regression(x, ir, block_sizes, blocks_start,
+                                         blocks_end)
+        # value = simplex_projection(block_sizes - 1,x)
+        # value = pysimplex_projection(block_sizes - 1,x)
+        # return projected_value
+
+    gd = GradientDescent(z0=z0, f=f, nabla_f=nabla_f, proj=proj, method='BB',
+                         A=A, N=N, target=target)
+    iters, times, states = gd.run()
+    x = xp + N.dot(states[-1])
+    assert np.all(x >= 0), 'x shouldn\'t have negative entries after projection'
+    print f(z0), f(states[-1])
+    ipdb.set_trace()
+    return x, f(z0), f(states[-1])
+
+def solve_in_z(A,b,x0,N,block_sizes,method):
+    if block_sizes is not None and len(block_sizes) == A.shape[1]:
+        logging.error('Trivial example: nblocks == nroutes, exiting solver')
+        import sys
+        sys.exit()
+
+    z0 = x2z(x0,block_sizes)
     target = A.dot(x0)-b
 
-    options = { 'max_iter': 300000,
-                'verbose': 1,
-                'opt_tol' : 1e-30,
-                'suff_dec': 0.003, # FIXME unused
-                'corrections': 500 } # FIXME unused
     AT = A.T.tocsr()
     NT = N.T.tocsr()
 
     f = lambda z: 0.5 * la.norm(A.dot(N.dot(z)) + target)**2
     nabla_f = lambda z: NT.dot(AT.dot(A.dot(N.dot(z)) + target))
 
+    ir = IsotonicRegression(y_min=0, y_max=1)
+    cum_blocks = np.concatenate(([0], np.cumsum(block_sizes-1)))
+    blocks_start = cum_blocks
+    blocks_end = cum_blocks[1:]
+
     def proj(x):
-        projected_value = simplex_projection(block_sizes - 1,x)
-        # projected_value = pysimplex_projection(block_sizes - 1,x)
-        return projected_value
+        return block_isotonic_regression(x, ir, block_sizes, blocks_start,
+                                         blocks_end)
+        # value = simplex_projection(block_sizes - 1,x)
+        # value = pysimplex_projection(block_sizes - 1,x)
+        # return projected_value
 
-    import time
-    iters, times, states = [], [], []
-    def log(iter_,state,duration):
-        iters.append(iter_)
-        times.append(duration)
-        states.append(state)
-        start = time.time()
-        return start
-
-    logging.debug('Starting %s solver...' % method)
-    if method == 'LBFGS':
-        LBFGS.solve(z0+1, f, nabla_f, solvers.stopping, log=log,proj=proj,
-                    options=options)
-        logging.debug("Took %s time" % str(np.sum(times)))
-    elif method == 'BB':
-        BB.solve(z0,f,nabla_f,solvers.stopping,log=log,proj=proj,
-                 options=options)
-    elif method == 'DORE':
-        # setup for DORE
-        alpha = 0.99
-        lsv = util.lsv_operator(A, N)
-        logging.info("Largest singular value: %s" % lsv)
-        A_dore = A*alpha/lsv
-        target_dore = target*alpha/lsv
-
-        DORE.solve(z0, lambda z: A_dore.dot(N.dot(z)),
-                   lambda b: N.T.dot(A_dore.T.dot(b)), target_dore, proj=proj,
-                   log=log,options=options,record_every=100)
-        A_dore = None
-    logging.debug('Stopping %s solver...' % method)
+    if method == 'DORE':
+        gd = GradientDescent(z0=z0, f=f, nabla_f=nabla_f, proj=proj,
+                             method=method, A=A, N=N, target=target)
+    else:
+        gd = GradientDescent(z0=z0, f=f, nabla_f=nabla_f, proj=proj,
+                             method=method)
+    iters, times, states = gd.run()
+    x = particular_x0(block_sizes) + N.dot(states[-1])
+    assert np.all(x >= 0), 'x shouldn\'t have negative entries after projection'
     return iters, times, states
 
 def LS_postprocess(states, x0, A, b, x_true, scaling=None, block_sizes=None,
@@ -279,7 +372,8 @@ def LS_postprocess(states, x0, A, b, x_true, scaling=None, block_sizes=None,
 
     # Convert back to x (from z) if necessary
     if not is_x and N.size > 0:
-        x_hat = N.dot(np.array(states).T) + np.tile(x0,(d,1)).T
+        xp = particular_x0(block_sizes)
+        x_hat = N.dot(np.array(states).T) + np.tile(xp,(d,1)).T
     else:
         x_hat = np.array(states).T
     x_last = x_hat[:,-1]
@@ -295,6 +389,8 @@ def LS_postprocess(states, x0, A, b, x_true, scaling=None, block_sizes=None,
     opt_error = 0.5 * la.norm(A.dot(x_true)-b)**2
     diff = A.dot(x_hat) - np.tile(b,(d,1)).T
     error = 0.5 * np.diag(diff.T.dot(diff))
+    if type(error) == np.float:
+        error = np.array([error])
     output['0.5norm(Ax-b)^2'], output['0.5norm(Ax_init-b)^2'] = error, starting_error
     output['0.5norm(Ax*-b)^2'] = opt_error
 
